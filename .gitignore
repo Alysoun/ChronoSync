@@ -1,0 +1,11 @@
+# Build Outputs
+ChronoSync.exe
+ChronoSyncTests.exe
+*.ilk
+*.pdb
+
+# MSVC Intermediate Files
+*.obj
+
+# Test Sandbox
+test_sandbox/
