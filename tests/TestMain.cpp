@@ -6,6 +6,7 @@
 #include <chrono>
 #include <cassert>
 #include "SyncEngine.h"
+#include "PathFilter.h"
 
 namespace fs = std::filesystem;
 
@@ -245,7 +246,26 @@ int main() {
     assert(!fs::exists(destDir / L"node_modules/pkg/index.js") && "node_modules trees should be excluded");
     assert(fs::exists(destDir / L"allowed.txt") && "non-matching files should still sync");
 
-    std::wcout << L"[9/9] Cleaning up test sandbox..." << std::endl;
+    std::wcout << L"[9/11] Verifying forward-slash path patterns (build/obj)..." << std::endl;
+    WriteTestFile(srcDir / L"build/obj/artifact.bin", "build artifact");
+    WriteTestFile(srcDir / L"build/allowed.bin", "allowed in build");
+
+    ChronoSync::FilterOptions slashFilters = ChronoSync::FilterOptions::FromSemicolonList(L"", L"build/obj");
+    ChronoSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), false, slashFilters, callbacks);
+    assert(!fs::exists(destDir / L"build/obj/artifact.bin") && "build/obj with forward slashes should be excluded");
+    assert(fs::exists(destDir / L"build/allowed.bin") && "sibling paths under build/ should still sync");
+
+    std::wcout << L"[10/11] Verifying trailing semicolon and empty-pattern guards..." << std::endl;
+    WriteTestFile(srcDir / L"trailing_guard.txt", "should still sync");
+
+    ChronoSync::FilterOptions trailingFilters = ChronoSync::FilterOptions::FromSemicolonList(L"", L"*.pkl;node_modules;");
+    assert(trailingFilters.excludePatterns.size() == 2 && "trailing semicolon must not create an empty pattern");
+    ChronoSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), false, trailingFilters, callbacks);
+    assert(fs::exists(destDir / L"trailing_guard.txt") && "trailing semicolon must not exclude everything");
+    assert(!ChronoSync::PathFilter::GlobMatch(L"", L"anything") && "empty glob pattern must not match");
+    assert(!ChronoSync::PathFilter::MatchesPattern(L"", L"path", L"name", false) && "empty match pattern must not match");
+
+    std::wcout << L"[11/11] Cleaning up test sandbox..." << std::endl;
     fs::remove_all(sandbox, ec);
 
     std::wcout << L"\n==============================================" << std::endl;

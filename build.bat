@@ -44,7 +44,7 @@ exit /b 1
 
 :msvc_build
 echo [Building ChronoSync GUI with MSVC (/MT)]
-cl.exe /EHsc /std:c++20 /MT /O2 /W4 /WX /Isrc /Fe:ChronoSync.exe src\Main.cpp src\SyncEngine.cpp src\PathFilter.cpp src\SyncProfile.cpp dwmapi.lib comctl32.lib ole32.lib user32.lib gdi32.lib shell32.lib /link /SUBSYSTEM:WINDOWS
+cl.exe /EHsc /std:c++20 /MT /O2 /W4 /WX /Isrc /Fe:ChronoSync.exe src\Main.cpp src\SyncEngine.cpp src\PathFilter.cpp src\SyncProfile.cpp dwmapi.lib comctl32.lib ole32.lib shell32.lib user32.lib gdi32.lib /link /SUBSYSTEM:WINDOWS
 if %errorlevel% neq 0 (
     echo [ERROR] GUI compilation failed with MSVC.
     exit /b %errorlevel%

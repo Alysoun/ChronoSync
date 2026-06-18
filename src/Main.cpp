@@ -43,7 +43,8 @@ enum ControlIds {
     ID_INCLUDE_FILTER_EDIT,
     ID_SAVE_PROFILE_BUTTON,
     ID_LOAD_PROFILE_BUTTON,
-    ID_PREVIEW_FILTER_EDIT = 203
+    ID_PREVIEW_FILTER_EDIT = 203,
+    ID_PREVIEW_LOCATE_EXPLORER
 };
 
 // Define thread communications message IDs
@@ -134,10 +135,19 @@ struct SyncMessageRegistry {
 
 SyncMessageRegistry g_MsgRegistry;
 
+struct PreviewLaunchData {
+    std::vector<ChronoSync::PreviewItem>* pList = nullptr;
+    std::wstring sourceRoot;
+    std::wstring destRoot;
+};
+
 // Context structure for resizable and sortable Preview Window
 struct PreviewWindowContext {
     std::vector<ChronoSync::PreviewItem>* pList = nullptr;
     std::vector<int> displayedIndices;
+    std::wstring sourceRoot;
+    std::wstring destRoot;
+    int contextMenuItem = -1;
     HWND hwndLV = NULL;
     HWND hwndFilter = NULL;
     HWND lblSummary = NULL;
@@ -228,6 +238,43 @@ void RebuildPreviewFilter(PreviewWindowContext* ctx) {
                                L" of " + std::to_wstring(ctx->pList->size()) + L" planned changes.";
         SetWindowTextW(ctx->lblSummary, summary.c_str());
     }
+}
+
+std::wstring ResolvePreviewExplorerPath(const ChronoSync::PreviewItem& item,
+                                        const std::wstring& sourceRoot,
+                                        const std::wstring& destRoot) {
+    const std::wstring& root = (item.action == L"Delete") ? destRoot : sourceRoot;
+    return root + L"\\" + item.relativePath;
+}
+
+bool RevealInExplorer(HWND owner, const std::wstring& fullPath) {
+    std::error_code ec;
+    std::filesystem::path revealPath(fullPath);
+
+    if (!std::filesystem::exists(revealPath, ec)) {
+        revealPath = revealPath.parent_path();
+        if (revealPath.empty() || !std::filesystem::exists(revealPath, ec)) {
+            MessageBoxW(owner, (L"Path does not exist:\n" + fullPath).c_str(),
+                        L"ChronoSync", MB_OK | MB_ICONWARNING);
+            return false;
+        }
+    }
+
+    PIDLIST_ABSOLUTE pidl = ILCreateFromPathW(revealPath.c_str());
+    if (!pidl) {
+        std::wstring args = L"/select,\"" + revealPath.wstring() + L"\"";
+        HINSTANCE result = ShellExecuteW(nullptr, L"open", L"explorer.exe", args.c_str(), nullptr, SW_SHOWNORMAL);
+        return reinterpret_cast<INT_PTR>(result) > 32;
+    }
+
+    HRESULT hr = SHOpenFolderAndSelectItems(pidl, 0, nullptr, 0);
+    ILFree(pidl);
+    if (FAILED(hr)) {
+        std::wstring args = L"/select,\"" + revealPath.wstring() + L"\"";
+        HINSTANCE result = ShellExecuteW(nullptr, L"open", L"explorer.exe", args.c_str(), nullptr, SW_SHOWNORMAL);
+        return reinterpret_cast<INT_PTR>(result) > 32;
+    }
+    return true;
 }
 
 // Helper to format bytes to string
@@ -896,17 +943,23 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     RECT rect = {0, 0, 680, 440};
                     AdjustWindowRectEx(&rect, WS_OVERLAPPEDWINDOW, FALSE, 0);
 
-                    // Pass raw pointer but retain unique_ptr ownership checks
+                    wchar_t src[MAX_PATH] = {};
+                    GetWindowTextW(g_hWndSrcEdit, src, MAX_PATH);
+                    GetWindowTextW(g_hWndDestEdit, dest, MAX_PATH);
+
+                    auto* launchData = new PreviewLaunchData();
+                    launchData->pList = pList.release();
+                    launchData->sourceRoot = src;
+                    launchData->destRoot = dest;
+
                     HWND hwndPreview = CreateWindowExW(
                         0, L"ChronoSyncPreviewWindow", L"Sync Preview - ChronoSync",
                         WS_OVERLAPPEDWINDOW,
                         CW_USEDEFAULT, CW_USEDEFAULT, rect.right - rect.left, rect.bottom - rect.top,
-                        hWnd, NULL, GetModuleHandleW(NULL), pList.get()
+                        hWnd, NULL, GetModuleHandleW(NULL), launchData
                     );
                     
                     if (hwndPreview) {
-                        // Successful window creation, release unique_ptr control
-                        pList.release();
 
                         // Style secondary window with DWM Immersive Dark Mode
                         BOOL useDarkMode = TRUE;
@@ -915,7 +968,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 
                         ShowWindow(hwndPreview, SW_SHOW);
                     } else {
-                        // Automatically cleans up pList if CreateWindowExW failed
+                        delete launchData->pList;
+                        delete launchData;
                         MessageBoxW(hWnd, L"Failed to create Preview window.", L"Error", MB_OK | MB_ICONERROR);
                     }
                 }
@@ -960,11 +1014,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 LRESULT CALLBACK PreviewWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
         case WM_CREATE: {
-            std::vector<ChronoSync::PreviewItem>* pList = 
-                (std::vector<ChronoSync::PreviewItem>*)((LPCREATESTRUCTW)lParam)->lpCreateParams;
+            PreviewLaunchData* launchData =
+                (PreviewLaunchData*)((LPCREATESTRUCTW)lParam)->lpCreateParams;
 
             PreviewWindowContext* ctx = new PreviewWindowContext();
-            ctx->pList = pList;
+            if (launchData) {
+                ctx->pList = launchData->pList;
+                ctx->sourceRoot = std::move(launchData->sourceRoot);
+                ctx->destRoot = std::move(launchData->destRoot);
+                delete launchData;
+            }
             SetWindowLongPtrW(hWnd, GWLP_USERDATA, (LONG_PTR)ctx);
 
             ctx->hwndFilter = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"",
@@ -1015,7 +1074,7 @@ LRESULT CALLBACK PreviewWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
                                               15, 395, 450, 20, hWnd, (HMENU)202, GetModuleHandleW(NULL), NULL);
             SendMessageW(ctx->lblSummary, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
 
-            if (pList) {
+            if (ctx->pList) {
                 RebuildPreviewFilter(ctx);
             }
 
@@ -1078,6 +1137,14 @@ LRESULT CALLBACK PreviewWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
             if (wmId == IDCANCEL) {
                 DestroyWindow(hWnd);
+            } else if (wmId == ID_PREVIEW_LOCATE_EXPLORER) {
+                if (ctx && ctx->pList && ctx->contextMenuItem >= 0 &&
+                    ctx->contextMenuItem < static_cast<int>(ctx->displayedIndices.size())) {
+                    const auto& item = (*ctx->pList)[static_cast<size_t>(
+                        ctx->displayedIndices[static_cast<size_t>(ctx->contextMenuItem)])];
+                    std::wstring fullPath = ResolvePreviewExplorerPath(item, ctx->sourceRoot, ctx->destRoot);
+                    RevealInExplorer(hWnd, fullPath);
+                }
             } else if (wmId == ID_EXPORT_CSV_BUTTON) {
                 if (ctx && ctx->pList && !ctx->pList->empty()) {
                     std::wstring selectedPath = SaveCSVDialog(hWnd, L"Export Preview to CSV");
@@ -1180,6 +1247,22 @@ LRESULT CALLBACK PreviewWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
                     // Force ListView to refresh and redraw sorted items
                     InvalidateRect(ctx->hwndLV, NULL, TRUE);
+                }
+            } else if (pnmh->code == NM_RCLICK && pnmh->idFrom == 201) {
+                LPNMITEMACTIVATE itemActivate = (LPNMITEMACTIVATE)lParam;
+                int item = itemActivate->iItem;
+                if (ctx && item >= 0 && item < static_cast<int>(ctx->displayedIndices.size())) {
+                    ctx->contextMenuItem = item;
+                    ListView_SetItemState(ctx->hwndLV, item, LVIS_SELECTED | LVIS_FOCUSED,
+                                          LVIS_SELECTED | LVIS_FOCUSED);
+
+                    HMENU hMenu = CreatePopupMenu();
+                    AppendMenuW(hMenu, MF_STRING, ID_PREVIEW_LOCATE_EXPLORER, L"Show in File Explorer");
+
+                    POINT pt = itemActivate->ptAction;
+                    ClientToScreen(pnmh->hwndFrom, &pt);
+                    TrackPopupMenu(hMenu, TPM_RIGHTBUTTON | TPM_LEFTALIGN, pt.x, pt.y, 0, hWnd, NULL);
+                    DestroyMenu(hMenu);
                 }
             }
             break;

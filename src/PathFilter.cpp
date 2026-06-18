@@ -24,6 +24,12 @@ namespace ChronoSync {
         return out;
     }
 
+    static std::wstring NormalizePatternSeparators(const std::wstring& pattern) {
+        std::wstring normalized = Trim(pattern);
+        std::replace(normalized.begin(), normalized.end(), L'/', L'\\');
+        return normalized;
+    }
+
     FilterOptions FilterOptions::Defaults() {
         FilterOptions opts;
         opts.excludePatterns = { L"*.pkl", L"node_modules", L"*.zip" };
@@ -38,7 +44,7 @@ namespace ChronoSync {
             if (sep == std::wstring::npos) {
                 sep = list.size();
             }
-            std::wstring token = Trim(list.substr(start, sep - start));
+            std::wstring token = NormalizePatternSeparators(list.substr(start, sep - start));
             if (!token.empty()) {
                 patterns.push_back(token);
             }
@@ -80,8 +86,16 @@ namespace ChronoSync {
     }
 
     bool PathFilter::GlobMatch(const std::wstring& pattern, const std::wstring& text) {
-        const std::wstring pat = ToLower(pattern);
-        const std::wstring txt = ToLower(text);
+        if (pattern.empty()) {
+            return false;
+        }
+        if (text.empty()) {
+            return pattern.find_first_not_of(L'*') == std::wstring::npos;
+        }
+
+        const std::wstring pat = ToLower(NormalizePatternSeparators(pattern));
+        std::wstring txt = ToLower(text);
+        std::replace(txt.begin(), txt.end(), L'/', L'\\');
 
         size_t p = 0;
         size_t t = 0;
@@ -112,44 +126,45 @@ namespace ChronoSync {
     }
 
     bool PathFilter::MatchesPattern(const std::wstring& pattern, const std::wstring& relativePath, const std::wstring& name, bool isDirectory) {
-        const std::wstring pat = Trim(pattern);
+        const std::wstring pat = NormalizePatternSeparators(pattern);
         if (pat.empty()) {
             return false;
         }
 
+        std::wstring normalizedName = name;
+        std::replace(normalizedName.begin(), normalizedName.end(), L'/', L'\\');
+        std::wstring normalizedPath = relativePath;
+        std::replace(normalizedPath.begin(), normalizedPath.end(), L'/', L'\\');
+
         const bool hasWildcard = pat.find(L'*') != std::wstring::npos || pat.find(L'?') != std::wstring::npos;
-        const bool hasPathSep = pat.find(L'\\') != std::wstring::npos || pat.find(L'/') != std::wstring::npos;
+        const bool hasPathSep = pat.find(L'\\') != std::wstring::npos;
 
         if (hasPathSep) {
-            std::wstring normalizedPath = ToLower(relativePath);
-            std::replace(normalizedPath.begin(), normalizedPath.end(), L'/', L'\\');
-            std::wstring normalizedPat = ToLower(pat);
-            std::replace(normalizedPat.begin(), normalizedPat.end(), L'/', L'\\');
-            return GlobMatch(normalizedPat, normalizedPath);
+            return GlobMatch(pat, normalizedPath);
         }
 
         if (hasWildcard) {
-            if (GlobMatch(pat, name)) {
+            if (GlobMatch(pat, normalizedName)) {
                 return true;
             }
-            return GlobMatch(pat, relativePath);
+            return GlobMatch(pat, normalizedPath);
         }
 
-        if (ToLower(name) == ToLower(pat)) {
+        if (ToLower(normalizedName) == ToLower(pat)) {
             return true;
         }
 
-        std::wstring normalizedPath = ToLower(relativePath);
-        std::replace(normalizedPath.begin(), normalizedPath.end(), L'/', L'\\');
-        const std::wstring needle = L"\\" + ToLower(pat) + L"\\";
-        if (normalizedPath.find(needle) != std::wstring::npos) {
+        const std::wstring lowerPath = ToLower(normalizedPath);
+        const std::wstring lowerPat = ToLower(pat);
+        const std::wstring needle = L"\\" + lowerPat + L"\\";
+        if (lowerPath.find(needle) != std::wstring::npos) {
             return true;
         }
-        if (normalizedPath.rfind(ToLower(pat) + L"\\", 0) == 0) {
+        if (lowerPath.rfind(lowerPat + L"\\", 0) == 0) {
             return true;
         }
-        if (normalizedPath.size() >= pat.size() + 1 &&
-            normalizedPath.compare(normalizedPath.size() - pat.size() - 1, pat.size() + 1, L"\\" + ToLower(pat)) == 0) {
+        if (lowerPath.size() >= lowerPat.size() + 1 &&
+            lowerPath.compare(lowerPath.size() - lowerPat.size() - 1, lowerPat.size() + 1, L"\\" + lowerPat) == 0) {
             return true;
         }
 
@@ -159,6 +174,9 @@ namespace ChronoSync {
 
     bool PathFilter::IsExcluded(const FilterOptions& options, const std::wstring& relativePath, const std::wstring& name, bool isDirectory) {
         for (const auto& pattern : options.excludePatterns) {
+            if (NormalizePatternSeparators(pattern).empty()) {
+                continue;
+            }
             if (MatchesPattern(pattern, relativePath, name, isDirectory)) {
                 return true;
             }
@@ -167,6 +185,9 @@ namespace ChronoSync {
         if (!options.includePatterns.empty()) {
             bool included = false;
             for (const auto& pattern : options.includePatterns) {
+                if (NormalizePatternSeparators(pattern).empty()) {
+                    continue;
+                }
                 if (MatchesPattern(pattern, relativePath, name, isDirectory)) {
                     included = true;
                     break;
@@ -181,17 +202,23 @@ namespace ChronoSync {
     }
 
     bool PathFilter::ShouldSkipDirectory(const FilterOptions& options, const std::wstring& dirName) {
+        std::wstring normalizedDirName = dirName;
+        std::replace(normalizedDirName.begin(), normalizedDirName.end(), L'/', L'\\');
+
         for (const auto& pattern : options.excludePatterns) {
-            const std::wstring pat = Trim(pattern);
+            const std::wstring pat = NormalizePatternSeparators(pattern);
             if (pat.empty()) {
                 continue;
             }
+
             const bool hasWildcard = pat.find(L'*') != std::wstring::npos || pat.find(L'?') != std::wstring::npos;
-            const bool hasPathSep = pat.find(L'\\') != std::wstring::npos || pat.find(L'/') != std::wstring::npos;
-            if (!hasWildcard && !hasPathSep && ToLower(dirName) == ToLower(pat)) {
+            const bool hasPathSep = pat.find(L'\\') != std::wstring::npos;
+
+            if (!hasWildcard && !hasPathSep && ToLower(normalizedDirName) == ToLower(pat)) {
                 return true;
             }
-            if (MatchesPattern(pat, dirName, dirName, true)) {
+
+            if (MatchesPattern(pat, normalizedDirName, normalizedDirName, true)) {
                 return true;
             }
         }
