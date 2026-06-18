@@ -1,4 +1,5 @@
 #include "DeltaCopy.h"
+#include "WinPath.h"
 #include <windows.h>
 #include <vector>
 #include <algorithm>
@@ -13,16 +14,18 @@ namespace ChronoSync {
                                         unsigned long long fileSizeBytes,
                                         const std::function<void(unsigned long long, unsigned long long)>& progressCallback) {
         DeltaCopyResult result;
-        std::wstring tempPath = destinationPath + L".chrono_tmp";
+        const std::wstring sourceOpen = WinPath::IsExtended(sourcePath) ? sourcePath : WinPath::ToExtended(sourcePath);
+        const std::wstring destOpen = WinPath::IsExtended(destinationPath) ? destinationPath : WinPath::ToExtended(destinationPath);
+        std::wstring tempPath = destOpen + L".chrono_tmp";
 
-        HANDLE hSource = CreateFileW(sourcePath.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+        HANDLE hSource = CreateFileW(sourceOpen.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
                                      FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
         if (hSource == INVALID_HANDLE_VALUE) {
             result.errorMessage = L"Unable to open source file. Win32 Error: " + std::to_wstring(GetLastError());
             return result;
         }
 
-        HANDLE hDest = CreateFileW(destinationPath.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        HANDLE hDest = CreateFileW(destOpen.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                                    nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
         const bool destExists = hDest != INVALID_HANDLE_VALUE;
 
@@ -119,7 +122,7 @@ namespace ChronoSync {
         }
         CloseHandle(hSource);
 
-        if (!MoveFileExW(tempPath.c_str(), destinationPath.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        if (!MoveFileExW(tempPath.c_str(), destOpen.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
             result.errorMessage = L"Atomic move failed after delta copy. Win32 Error: " + std::to_wstring(GetLastError());
             DeleteFileW(tempPath.c_str());
             return result;

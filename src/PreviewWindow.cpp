@@ -72,6 +72,41 @@ static std::wstring ResolvePreviewExplorerPath(const ChronoSync::PreviewItem& it
     return root + L"\\" + item.relativePath;
 }
 
+static std::wstring BuildPreviewClipboardText(PreviewWindowContext* ctx) {
+    if (!ctx || !ctx->pList) {
+        return {};
+    }
+
+    const std::vector<int>& indices = !ctx->displayedIndices.empty()
+        ? ctx->displayedIndices
+        : std::vector<int>();
+
+    std::wstring text = L"Relative Path\tPlanned Action\tSize\r\n";
+    auto appendRow = [&](const ChronoSync::PreviewItem& item) {
+        text += item.relativePath;
+        text += L'\t';
+        text += item.action;
+        text += L'\t';
+        text += item.sizeStr;
+        text += L"\r\n";
+    };
+
+    if (!indices.empty()) {
+        for (int index : indices) {
+            appendRow((*ctx->pList)[static_cast<size_t>(index)]);
+        }
+    } else {
+        for (const auto& item : *ctx->pList) {
+            appendRow(item);
+        }
+    }
+    return text;
+}
+
+static void CopyPreviewToClipboard(PreviewWindowContext* ctx) {
+    CopyWideTextToClipboard(BuildPreviewClipboardText(ctx));
+}
+
 LRESULT CALLBACK PreviewWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
         case WM_CREATE: {
@@ -136,8 +171,12 @@ LRESULT CALLBACK PreviewWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
             }
 
             ctx->btnExport = CreateWindowExW(0, L"BUTTON", L"Export CSV...", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                                             425, 390, 115, 30, hWnd, (HMENU)ID_EXPORT_CSV_BUTTON, GetModuleHandleW(NULL), NULL);
+                                             300, 390, 115, 30, hWnd, (HMENU)ID_EXPORT_CSV_BUTTON, GetModuleHandleW(NULL), NULL);
             SendMessageW(ctx->btnExport, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
+
+            ctx->btnCopy = CreateWindowExW(0, L"BUTTON", L"Copy", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                                           425, 390, 115, 30, hWnd, (HMENU)ID_PREVIEW_COPY_BUTTON, GetModuleHandleW(NULL), NULL);
+            SendMessageW(ctx->btnCopy, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
 
             ctx->btnClose = CreateWindowExW(0, L"BUTTON", L"Close", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                                              550, 390, 115, 30, hWnd, (HMENU)IDCANCEL, GetModuleHandleW(NULL), NULL);
@@ -161,7 +200,10 @@ LRESULT CALLBACK PreviewWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
                     MoveWindow(ctx->lblSummary, 15, cy - 40, cx - 270, 20, TRUE);
                 }
                 if (ctx->btnExport) {
-                    MoveWindow(ctx->btnExport, cx - 255, cy - 45, 115, 30, TRUE);
+                    MoveWindow(ctx->btnExport, cx - 380, cy - 45, 115, 30, TRUE);
+                }
+                if (ctx->btnCopy) {
+                    MoveWindow(ctx->btnCopy, cx - 255, cy - 45, 115, 30, TRUE);
                 }
                 if (ctx->btnClose) {
                     MoveWindow(ctx->btnClose, cx - 130, cy - 45, 115, 30, TRUE);
@@ -199,6 +241,8 @@ LRESULT CALLBACK PreviewWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
             if (wmId == IDCANCEL) {
                 DestroyWindow(hWnd);
+            } else if (wmId == ID_PREVIEW_COPY_BUTTON) {
+                CopyPreviewToClipboard(ctx);
             } else if (wmId == ID_PREVIEW_LOCATE_EXPLORER) {
                 if (ctx && ctx->pList && ctx->contextMenuItem >= 0 &&
                     ctx->contextMenuItem < static_cast<int>(ctx->displayedIndices.size())) {
@@ -324,6 +368,16 @@ LRESULT CALLBACK PreviewWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
             }
             break;
         }
+        case WM_KEYDOWN: {
+            PreviewWindowContext* ctx =
+                (PreviewWindowContext*)GetWindowLongPtrW(hWnd, GWLP_USERDATA);
+            if (ctx && ctx->hwndLV && GetFocus() == ctx->hwndLV &&
+                (GetKeyState(VK_CONTROL) & 0x8000) && (wParam == 'C' || wParam == 'c')) {
+                CopyPreviewToClipboard(ctx);
+                return 0;
+            }
+            break;
+        }
         case WM_DESTROY: {
             PreviewWindowContext* ctx =
                 (PreviewWindowContext*)GetWindowLongPtrW(hWnd, GWLP_USERDATA);
@@ -351,6 +405,6 @@ bool RegisterPreviewWindowClass(HINSTANCE hInstance) {
     wcp.hCursor = LoadCursor(NULL, IDC_ARROW);
     wcp.hbrBackground = CreateSolidBrush(UiTheme::WindowBg);
     wcp.lpszClassName = L"ChronoSyncPreviewWindow";
-    wcp.hIcon = LoadIcon(NULL, IDI_APPLICATION);
+    ApplyAppWindowIcons(wcp, hInstance);
     return RegisterClassExW(&wcp) != 0;
 }

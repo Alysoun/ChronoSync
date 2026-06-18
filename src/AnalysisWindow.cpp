@@ -3,6 +3,11 @@
 #include <uxtheme.h>
 #include <dwmapi.h>
 
+namespace {
+    constexpr int ID_ANALYSIS_EDIT = 3001;
+    constexpr int ID_ANALYSIS_COPY = 3003;
+}
+
 static LRESULT CALLBACK AnalysisWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
         case WM_CREATE: {
@@ -10,22 +15,29 @@ static LRESULT CALLBACK AnalysisWndProc(HWND hWnd, UINT message, WPARAM wParam, 
                 reinterpret_cast<LPCREATESTRUCTW>(lParam)->lpCreateParams);
             SetWindowLongPtrW(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(report));
 
-            CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", report ? report->c_str() : L"",
-                            WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_READONLY | WS_VSCROLL | ES_AUTOVSCROLL,
-                            15, 15, 600, 430, hWnd, (HMENU)3001, GetModuleHandleW(NULL), NULL);
-            SendMessageW(GetDlgItem(hWnd, 3001), WM_SETFONT, (WPARAM)g_hFontLog, TRUE);
-            SetWindowTheme(GetDlgItem(hWnd, 3001), L"Explorer", nullptr);
+            HWND hwndEdit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", report ? report->c_str() : L"",
+                                            WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_READONLY | WS_VSCROLL | ES_AUTOVSCROLL,
+                                            15, 15, 600, 400, hWnd, (HMENU)(INT_PTR)ID_ANALYSIS_EDIT, GetModuleHandleW(NULL), NULL);
+            SendMessageW(hwndEdit, WM_SETFONT, (WPARAM)g_hFontLog, TRUE);
+            SetWindowTheme(hwndEdit, L"Explorer", nullptr);
+            AttachReadOnlyEditCopySupport(hwndEdit);
 
+            CreateWindowExW(0, L"BUTTON", L"Copy", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                            370, 425, 115, 30, hWnd, (HMENU)(INT_PTR)ID_ANALYSIS_COPY, GetModuleHandleW(NULL), NULL);
             CreateWindowExW(0, L"BUTTON", L"Close", WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-                            500, 455, 115, 30, hWnd, (HMENU)IDCANCEL, GetModuleHandleW(NULL), NULL);
+                            500, 425, 115, 30, hWnd, (HMENU)IDCANCEL, GetModuleHandleW(NULL), NULL);
             break;
         }
         case WM_SIZE: {
             int cx = LOWORD(lParam);
             int cy = HIWORD(lParam);
-            HWND hwndEdit = GetDlgItem(hWnd, 3001);
+            HWND hwndEdit = GetDlgItem(hWnd, ID_ANALYSIS_EDIT);
             if (hwndEdit) {
                 MoveWindow(hwndEdit, 15, 15, cx - 30, cy - 70, TRUE);
+            }
+            HWND hwndCopy = GetDlgItem(hWnd, ID_ANALYSIS_COPY);
+            if (hwndCopy) {
+                MoveWindow(hwndCopy, cx - 245, cy - 45, 115, 30, TRUE);
             }
             HWND hwndClose = GetDlgItem(hWnd, IDCANCEL);
             if (hwndClose) {
@@ -33,8 +45,16 @@ static LRESULT CALLBACK AnalysisWndProc(HWND hWnd, UINT message, WPARAM wParam, 
             }
             break;
         }
+        case WM_GETMINMAXINFO: {
+            auto* mmi = reinterpret_cast<MINMAXINFO*>(lParam);
+            mmi->ptMinTrackSize.x = 360;
+            mmi->ptMinTrackSize.y = 240;
+            break;
+        }
         case WM_COMMAND:
-            if (LOWORD(wParam) == IDCANCEL) {
+            if (LOWORD(wParam) == ID_ANALYSIS_COPY) {
+                CopyEditContentToClipboard(GetDlgItem(hWnd, ID_ANALYSIS_EDIT));
+            } else if (LOWORD(wParam) == IDCANCEL) {
                 DestroyWindow(hWnd);
             }
             break;
@@ -89,7 +109,7 @@ void ShowAnalysisWindow(HWND parent, const std::wstring& report) {
         WS_EX_DLGMODALFRAME,
         L"ChronoSyncAnalysisWindow",
         L"Plan Analysis - ChronoSync",
-        WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MAXIMIZEBOX,
+        WindowStyle::ResizableDialog,
         CW_USEDEFAULT, CW_USEDEFAULT, 640, 520,
         parent, NULL, hInstance, reportCopy);
 

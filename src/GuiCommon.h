@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include <mutex>
+#include <atomic>
 #include "SyncPlanAnalysis.h"
 #include "SyncJob.h"
 #include "SyncEngine.h"
@@ -47,6 +48,7 @@ enum ControlIds {
     ID_LOAD_PROFILE_BUTTON,
     ID_PREVIEW_FILTER_EDIT = 203,
     ID_PREVIEW_LOCATE_EXPLORER,
+    ID_PREVIEW_COPY_BUTTON,
     ID_SHA256_CHECKBOX,
     ID_VERIFY_COPY_CHECKBOX,
     ID_VERSIONED_BACKUP_CHECKBOX,
@@ -64,7 +66,9 @@ enum ControlIds {
     ID_SCHEDULE_DAY_COMBO,
     ID_SCHEDULE_OK,
     ID_SCHEDULE_CANCEL,
-    ID_RISK_LABEL
+    ID_RISK_LABEL,
+    ID_LOG_SPLITTER,
+    ID_COPY_LOG_BUTTON
 };
 
 #define WM_SYNC_EVENT               (WM_USER + 10)
@@ -82,19 +86,28 @@ namespace MainLayout {
 }
 
 struct SyncMessageRegistry {
+    static constexpr size_t kMaxPendingLogs = 256;
+
     std::mutex mtx;
     std::vector<std::wstring> logs;
     std::wstring status;
     int progressPct = 0;
     bool progressChanged = false;
     bool statusChanged = false;
+    bool logOverflowNotified = false;
 
     void PushLog(const std::wstring& line);
     void SetStatus(const std::wstring& stat);
     void SetProgress(int pct);
+    void ResetForNewRun();
+    bool HasPending();
     bool Drain(std::vector<std::wstring>& outLogs, std::wstring& outStatus, int& outProgress,
                bool& outStatusChanged, bool& outProgressChanged);
 };
+
+void RequestSyncUiEvent();
+void BeginSyncUiDrain();
+std::wstring TruncateForStatus(const std::wstring& text, size_t maxChars = 140);
 
 struct PreviewLaunchData {
     std::vector<ChronoSync::PreviewItem>* pList = nullptr;
@@ -141,6 +154,12 @@ extern HWND g_hWndScheduleBtn;
 extern HWND g_hWndHistoryBtn;
 extern HWND g_hWndAdvancedGroup;
 extern HWND g_hWndRiskLabel;
+extern HWND g_hWndLogSplitter;
+extern HWND g_hWndCopyLogBtn;
+
+extern bool g_logFollowTail;
+extern int g_logHeightBias;
+extern WNDPROC g_logEditOrigProc;
 
 extern ChronoSync::SyncPlanAnalysis g_CachedPlanAnalysis;
 extern bool g_HasCachedPlanAnalysis;
@@ -159,3 +178,14 @@ extern bool g_SyncRunning;
 extern SyncMessageRegistry g_MsgRegistry;
 
 bool IsEditControl(HWND hwndCtrl);
+void ApplyAppWindowIcons(WNDCLASSEXW& wc, HINSTANCE hInstance);
+
+namespace WindowStyle {
+    constexpr DWORD ResizableDialog =
+        WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MAXIMIZEBOX | WS_MINIMIZEBOX;
+}
+
+bool HandleReadOnlyEditAccelerator(HWND hwndEdit, WPARAM keyCode);
+bool CopyWideTextToClipboard(const std::wstring& text);
+bool CopyEditContentToClipboard(HWND hwndEdit);
+void AttachReadOnlyEditCopySupport(HWND hwndEdit);

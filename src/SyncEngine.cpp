@@ -5,8 +5,10 @@
 #include "NetworkShare.h"
 #include "SyncPlanAnalysis.h"
 #include "SyncHistory.h"
+#include "WinPath.h"
 #include <windows.h>
 #include <chrono>
+#include <cstring>
 
 #ifndef IO_REPARSE_TAG_SYMLINK
 #define IO_REPARSE_TAG_SYMLINK 0xA000000CL
@@ -17,81 +19,88 @@ namespace ChronoSync {
     static void ScanDirectoryHelper(const std::wstring& rootDir, const std::wstring& subDir,
                                     const FilterOptions& filters,
                                     std::vector<SyncItem>& items, const SyncCallbacks& callbacks) {
-        std::wstring searchPath = rootDir + L"\\" + (subDir.empty() ? L"" : subDir + L"\\") + L"*";
-        WIN32_FIND_DATAW findData;
-        HANDLE hFind = FindFirstFileW(searchPath.c_str(), &findData);
+        std::vector<std::wstring> pendingDirs;
+        pendingDirs.push_back(subDir);
 
-        if (hFind == INVALID_HANDLE_VALUE) {
-            return;
-        }
+        while (!pendingDirs.empty()) {
+            const std::wstring currentDir = std::move(pendingDirs.back());
+            pendingDirs.pop_back();
 
-        do {
-            std::wstring name = findData.cFileName;
-            if (name == L"." || name == L"..") {
+            std::wstring searchPath = rootDir + L"\\" + (currentDir.empty() ? L"" : currentDir + L"\\") + L"*";
+            WIN32_FIND_DATAW findData;
+            HANDLE hFind = FindFirstFileW(searchPath.c_str(), &findData);
+            if (hFind == INVALID_HANDLE_VALUE) {
                 continue;
             }
 
-            if (name == L".chrono_trash" || name == L".chrono_backups" || name == L".chrono_history") {
-                continue;
-            }
-            if (name == L".chrono_tmp" || (name.size() >= 11 && name.compare(name.size() - 11, 11, L".chrono_tmp") == 0)) {
-                continue;
-            }
+            do {
+                std::wstring name = findData.cFileName;
+                if (name == L"." || name == L"..") {
+                    continue;
+                }
 
-            std::wstring relPath = subDir.empty() ? name : subDir + L"\\" + name;
-            bool isDirectory = (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+                if (name == L".chrono_trash" || name == L".chrono_backups" || name == L".chrono_history") {
+                    continue;
+                }
+                if (name == L".chrono_tmp" || (name.size() >= 11 && name.compare(name.size() - 11, 11, L".chrono_tmp") == 0)) {
+                    continue;
+                }
 
-            if (isDirectory && PathFilter::ShouldSkipDirectory(filters, name)) {
-                continue;
-            }
-            if (PathFilter::IsExcluded(filters, relPath, name, isDirectory)) {
-                continue;
-            }
+                std::wstring relPath = currentDir.empty() ? name : currentDir + L"\\" + name;
+                bool isDirectory = (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
 
-            SyncItem item;
-            item.relativePath = relPath;
-            item.isDirectory = isDirectory;
-            item.lastWriteTime = findData.ftLastWriteTime;
+                if (isDirectory && PathFilter::ShouldSkipDirectory(filters, name)) {
+                    continue;
+                }
+                if (PathFilter::IsExcluded(filters, relPath, name, isDirectory)) {
+                    continue;
+                }
 
-            bool isReparsePoint = (findData.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
-            item.isReparsePoint = isReparsePoint;
+                SyncItem item;
+                item.relativePath = relPath;
+                item.isDirectory = isDirectory;
+                item.lastWriteTime = findData.ftLastWriteTime;
 
-            if (isReparsePoint) {
-                item.reparseTag = findData.dwReserved0;
-                std::error_code ec;
-                std::wstring fullPath = rootDir + L"\\" + relPath;
-                auto target = std::filesystem::read_symlink(fullPath, ec);
-                if (!ec) {
-                    std::wstring targetStr = target.wstring();
-                    if (targetStr.size() >= 4 &&
-                        ((targetStr[0] == L'\\' && targetStr[1] == L'?' && targetStr[2] == L'?' && targetStr[3] == L'\\') ||
-                         (targetStr[0] == L'\\' && targetStr[1] == L'\\' && targetStr[2] == L'?' && targetStr[3] == L'\\'))) {
-                        targetStr = targetStr.substr(4);
+                bool isReparsePoint = (findData.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+                item.isReparsePoint = isReparsePoint;
+
+                if (isReparsePoint) {
+                    item.reparseTag = findData.dwReserved0;
+                    std::error_code ec;
+                    std::filesystem::path fullPath = WinPath::Join(std::filesystem::path(rootDir), relPath);
+                    auto target = std::filesystem::read_symlink(fullPath, ec);
+                    if (!ec) {
+                        std::wstring targetStr = target.wstring();
+                        if (targetStr.size() >= 4 &&
+                            ((targetStr[0] == L'\\' && targetStr[1] == L'?' && targetStr[2] == L'?' && targetStr[3] == L'\\') ||
+                             (targetStr[0] == L'\\' && targetStr[1] == L'\\' && targetStr[2] == L'?' && targetStr[3] == L'\\'))) {
+                            targetStr = targetStr.substr(4);
+                        }
+                        item.reparseTarget = targetStr;
                     }
-                    item.reparseTarget = targetStr;
                 }
-            }
 
-            if (!item.isDirectory) {
-                ULARGE_INTEGER fileSize;
-                fileSize.LowPart = findData.nFileSizeLow;
-                fileSize.HighPart = findData.nFileSizeHigh;
-                item.fileSize = fileSize.QuadPart;
-            }
-
-            items.push_back(item);
-
-            if (item.isDirectory) {
-                if (callbacks.onScanDir) {
-                    callbacks.onScanDir(relPath);
+                if (!item.isDirectory) {
+                    ULARGE_INTEGER fileSize;
+                    fileSize.LowPart = findData.nFileSizeLow;
+                    fileSize.HighPart = findData.nFileSizeHigh;
+                    item.fileSize = fileSize.QuadPart;
                 }
-                if (!isReparsePoint) {
-                    ScanDirectoryHelper(rootDir, relPath, filters, items, callbacks);
-                }
-            }
-        } while (FindNextFileW(hFind, &findData));
 
-        FindClose(hFind);
+                items.push_back(item);
+
+                if (item.isDirectory) {
+                    if (callbacks.onScanDir) {
+                        callbacks.onScanDir(relPath);
+                    }
+                    if (!isReparsePoint) {
+                        pendingDirs.push_back(relPath);
+                    }
+                }
+            } while (FindNextFileW(hFind, &findData));
+
+            FindClose(hFind);
+        }
     }
 
     std::vector<SyncItem> SyncEngine::ScanDirectory(const std::wstring& rootDir, const FilterOptions& filters, const SyncCallbacks& callbacks) {
@@ -100,8 +109,9 @@ namespace ChronoSync {
             callbacks.onScanStart(rootDir);
         }
 
-        if (std::filesystem::exists(rootDir)) {
-            ScanDirectoryHelper(rootDir, L"", filters, items, callbacks);
+        std::filesystem::path scanRoot = WinPath::NormalizeRoot(rootDir);
+        if (std::filesystem::exists(scanRoot)) {
+            ScanDirectoryHelper(scanRoot.wstring(), L"", filters, items, callbacks);
         }
 
         if (callbacks.onScanComplete) {
@@ -114,8 +124,8 @@ namespace ChronoSync {
         auto startTime = std::chrono::high_resolution_clock::now();
         SyncStats stats;
 
-        std::filesystem::path srcRoot(source);
-        std::filesystem::path destRoot(destination);
+        std::filesystem::path srcRoot = WinPath::NormalizeRoot(source);
+        std::filesystem::path destRoot = WinPath::NormalizeRoot(destination);
 
         if (!std::filesystem::exists(srcRoot)) {
             if (callbacks.onLog) {
@@ -146,7 +156,7 @@ namespace ChronoSync {
             callbacks.onCompareStart();
         }
         auto compareStart = std::chrono::high_resolution_clock::now();
-        SyncPlan plan = BuildSyncPlan(srcItems, destItems, srcRoot, destRoot, options);
+        SyncPlan plan = BuildSyncPlan(srcItems, destItems, srcRoot, destRoot, options, callbacks);
         stats.filesSkipped = plan.filesSkipped;
         auto compareEnd = std::chrono::high_resolution_clock::now();
         stats.compareTimeMs = std::chrono::duration<double, std::milli>(compareEnd - compareStart).count();
@@ -166,7 +176,14 @@ namespace ChronoSync {
         stats.totalTimeMs = std::chrono::duration<double, std::milli>(endTime - startTime).count();
 
         std::wstring historyError;
-        SyncHistoryIO::RecordRun(source, destination, options, stats, historyError);
+        try {
+            SyncHistoryIO::RecordRun(source, destination, options, stats, historyError);
+        } catch (const std::exception& ex) {
+            historyError = L"History recording failed: " +
+                             std::wstring(ex.what(), ex.what() + std::strlen(ex.what()));
+        } catch (...) {
+            historyError = L"History recording failed with an unexpected error.";
+        }
         if (!historyError.empty() && callbacks.onLog) {
             callbacks.onLog(L"History: " + historyError, false);
         }

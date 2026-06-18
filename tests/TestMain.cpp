@@ -12,6 +12,7 @@
 #include "DeltaCopy.h"
 #include "SyncPlanAnalysis.h"
 #include "SyncHistory.h"
+#include "WinPath.h"
 
 namespace fs = std::filesystem;
 
@@ -206,13 +207,18 @@ int main() {
     assert(!readEc && "Should be able to read destination junction target");
     
     std::wstring normalizedTarget = readTarget.wstring();
-    if (normalizedTarget.size() >= 4 && 
+    if (normalizedTarget.size() >= 4 &&
         ((normalizedTarget[0] == L'\\' && normalizedTarget[1] == L'?' && normalizedTarget[2] == L'?' && normalizedTarget[3] == L'\\') ||
          (normalizedTarget[0] == L'\\' && normalizedTarget[1] == L'\\' && normalizedTarget[2] == L'?' && normalizedTarget[3] == L'\\'))) {
-        normalizedTarget = normalizedTarget.substr(4);
+        if (normalizedTarget.rfind(L"\\\\?\\UNC\\", 0) == 0) {
+            normalizedTarget = L"\\\\" + normalizedTarget.substr(8);
+        } else {
+            normalizedTarget = normalizedTarget.substr(4);
+        }
     }
-    std::wstring expectedTarget = (srcDir / L"folder1").wstring();
-    assert(normalizedTarget == expectedTarget && "Destination junction target must match the source target");
+    std::wstring expectedTarget = (destDir / L"folder1").wstring();
+    assert(_wcsicmp(normalizedTarget.c_str(), expectedTarget.c_str()) == 0 &&
+           "Destination junction target must point to the mirrored folder on the destination");
 
     // Clean up junction in source and verify pruning deletes it from destination
     // We must use RemoveDirectoryW to delete the junction safely in our test cleanup!
@@ -373,6 +379,8 @@ int main() {
            analysisReport.analysis.risk == ChronoSync::RiskLevel::High);
     std::wstring reportText = ChronoSync::FormatSyncPlanReport(analysisReport.analysis);
     assert(reportText.find(L"Risk:") != std::wstring::npos);
+    assert(reportText.find(L"collision_path") != std::wstring::npos &&
+           "analysis report should name replacement paths");
     assert(reportText.find(L"Largest files:") != std::wstring::npos || analysisReport.analysis.largestFiles.empty());
 
     assert(reportText.find(L"Top extensions") != std::wstring::npos ||
@@ -409,7 +417,31 @@ int main() {
     auto recent = ChronoSync::SyncHistoryIO::QuerySinceDays(destDir.wstring(), 7);
     assert(recent.size() >= 2);
 
-    std::wcout << L"[19/19] Cleaning up test sandbox..." << std::endl;
+    std::wcout << L"[19/20] Verifying long path support..." << std::endl;
+    fs::path longSrc = sandbox / L"longsrc";
+    fs::path longDest = sandbox / L"longdest";
+    fs::create_directories(longSrc);
+    fs::create_directories(longDest);
+
+    std::wstring longRel;
+    for (int i = 0; i < 24; ++i) {
+        longRel += L"deep_directory_level_" + std::to_wstring(i) + L"\\";
+    }
+    longRel += L"leaf.txt";
+    std::error_code longEc;
+    assert(ChronoSync::WinPath::CreateParentDirectories(longSrc.wstring(), longRel, longEc) && !longEc);
+    {
+        std::ofstream out(ChronoSync::WinPath::Join(longSrc.wstring(), longRel).wstring(), std::ios::binary | std::ios::trunc);
+        assert(out && "Failed to create long-path test file");
+        out << "long path leaf";
+    }
+
+    ChronoSync::SyncStats longStats = ChronoSync::SyncEngine::Sync(
+        longSrc.wstring(), longDest.wstring(), noFilters, callbacks);
+    assert(longStats.filesCopied == 1 && "long path file should sync");
+    assert(fs::exists(ChronoSync::WinPath::Join(longDest.wstring(), longRel)) && "long path destination should exist");
+
+    std::wcout << L"[20/20] Cleaning up test sandbox..." << std::endl;
     fs::remove_all(sandbox, ec);
 
     std::wcout << L"\n==============================================" << std::endl;

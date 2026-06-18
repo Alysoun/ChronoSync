@@ -1,9 +1,49 @@
 #include "SyncPlanAnalysis.h"
+#include "WinPath.h"
 #include <algorithm>
 #include <cwctype>
 #include <sstream>
 
+#ifndef IO_REPARSE_TAG_MOUNT_POINT
+#define IO_REPARSE_TAG_MOUNT_POINT 0xA0000003L
+#endif
+
 namespace ChronoSync {
+
+    static std::wstring DescribeSyncItemKind(const SyncItem& item) {
+        if (item.isReparsePoint) {
+            return (item.reparseTag == IO_REPARSE_TAG_MOUNT_POINT) ? L"junction" : L"symlink";
+        }
+        return item.isDirectory ? L"directory" : L"file";
+    }
+
+    static void AppendRemovalPaths(std::wstringstream& out,
+                                   const std::vector<PlannedRemovalEntry>& removals,
+                                   DeleteReason reason,
+                                   size_t maxListed) {
+        size_t total = 0;
+        for (const auto& entry : removals) {
+            if (entry.reason == reason) {
+                ++total;
+            }
+        }
+        if (total == 0) {
+            return;
+        }
+
+        size_t listed = 0;
+        for (const auto& entry : removals) {
+            if (entry.reason != reason) {
+                continue;
+            }
+            if (listed >= maxListed) {
+                out << L"    ... and " << (total - maxListed) << L" more\r\n";
+                break;
+            }
+            out << L"    " << entry.relativePath << L" (" << entry.itemKind << L")\r\n";
+            ++listed;
+        }
+    }
 
     static std::wstring ToLowerExt(const std::wstring& ext) {
         std::wstring lower = ext;
@@ -90,7 +130,18 @@ namespace ChronoSync {
                 analysis.filesToCopyUpdate++;
             }
             analysis.totalBytesToTransfer += fileItem.fileSize;
-            analysis.largestFiles.push_back({ fileItem.relativePath, fileItem.fileSize });
+
+            if (analysis.largestFiles.size() < 5) {
+                analysis.largestFiles.push_back({ fileItem.relativePath, fileItem.fileSize });
+                if (analysis.largestFiles.size() == 5) {
+                    std::sort(analysis.largestFiles.begin(), analysis.largestFiles.end(),
+                        [](const LargestFileEntry& a, const LargestFileEntry& b) { return a.bytes > b.bytes; });
+                }
+            } else if (fileItem.fileSize > analysis.largestFiles.back().bytes) {
+                analysis.largestFiles.back() = { fileItem.relativePath, fileItem.fileSize };
+                std::sort(analysis.largestFiles.begin(), analysis.largestFiles.end(),
+                    [](const LargestFileEntry& a, const LargestFileEntry& b) { return a.bytes > b.bytes; });
+            }
 
             std::wstring category = CategorizeExtension(GetExtension(fileItem.relativePath));
             auto bucketIt = std::find_if(analysis.fileTypeBreakdown.begin(), analysis.fileTypeBreakdown.end(),
@@ -116,9 +167,6 @@ namespace ChronoSync {
 
         std::sort(analysis.largestFiles.begin(), analysis.largestFiles.end(),
             [](const LargestFileEntry& a, const LargestFileEntry& b) { return a.bytes > b.bytes; });
-        if (analysis.largestFiles.size() > 5) {
-            analysis.largestFiles.resize(5);
-        }
 
         std::sort(analysis.fileTypeBreakdown.begin(), analysis.fileTypeBreakdown.end(),
             [](const FileTypeBucket& a, const FileTypeBucket& b) { return a.totalBytes > b.totalBytes; });
@@ -130,6 +178,12 @@ namespace ChronoSync {
         }
 
         for (const auto& plannedDelete : plan.itemsToDelete) {
+            PlannedRemovalEntry removal;
+            removal.relativePath = plannedDelete.item.relativePath;
+            removal.itemKind = DescribeSyncItemKind(plannedDelete.item);
+            removal.reason = plannedDelete.reason;
+            analysis.plannedRemovals.push_back(removal);
+
             if (plannedDelete.reason == DeleteReason::Replace) {
                 analysis.deletesReplace++;
             } else {
@@ -175,6 +229,13 @@ namespace ChronoSync {
         }
         if (analysis.deletesReplace > 0) {
             analysis.riskReasons.push_back(std::to_wstring(analysis.deletesReplace) + L" destination replacement(s)");
+            if (analysis.deletesReplace <= 3) {
+                for (const auto& entry : analysis.plannedRemovals) {
+                    if (entry.reason == DeleteReason::Replace) {
+                        analysis.riskReasons.push_back(L"Replace: " + entry.relativePath + L" (" + entry.itemKind + L")");
+                    }
+                }
+            }
         }
         if (analysis.linksToCreate > 0) {
             analysis.riskReasons.push_back(std::to_wstring(analysis.linksToCreate) + L" junction/symlink recreation(s)");
@@ -216,9 +277,11 @@ namespace ChronoSync {
         out << L"  Recreate " << analysis.linksToCreate << L" junction(s)/symlink(s)\r\n";
         if (analysis.deletesPrune > 0) {
             out << L"  Archive/delete " << analysis.deletesPrune << L" pruned item(s)\r\n";
+            AppendRemovalPaths(out, analysis.plannedRemovals, DeleteReason::Prune, 50);
         }
         if (analysis.deletesReplace > 0) {
             out << L"  Remove " << analysis.deletesReplace << L" destination item(s) to resolve type conflicts\r\n";
+            AppendRemovalPaths(out, analysis.plannedRemovals, DeleteReason::Replace, 100);
         }
         out << L"  Skip " << analysis.filesSkipped << L" unchanged file(s)\r\n";
         out << L"  Transfer approximately " << FormatBytes(analysis.totalBytesToTransfer) << L"\r\n\r\n";
@@ -261,7 +324,7 @@ namespace ChronoSync {
             out << L"Top extensions by transfer size:\r\n";
             for (const auto& bucket : analysis.extensionBreakdown) {
                 out << L"  " << bucket.label
-                    << L" — " << bucket.fileCount << L" file(s), " << FormatBytes(bucket.totalBytes) << L"\r\n";
+                    << L" \u2014 " << bucket.fileCount << L" file(s), " << FormatBytes(bucket.totalBytes) << L"\r\n";
             }
         }
 
@@ -273,8 +336,8 @@ namespace ChronoSync {
                                        const SyncOptions& options,
                                        const SyncCallbacks& callbacks) {
         SyncPlanReport report;
-        std::filesystem::path srcRoot(source);
-        std::filesystem::path destRoot(destination);
+        std::filesystem::path srcRoot = WinPath::NormalizeRoot(source);
+        std::filesystem::path destRoot = WinPath::NormalizeRoot(destination);
 
         if (!std::filesystem::exists(srcRoot)) {
             if (callbacks.onLog) {
@@ -298,7 +361,7 @@ namespace ChronoSync {
             destMap[item.relativePath] = item;
         }
 
-        SyncPlan plan = BuildSyncPlan(srcItems, destItems, srcRoot, destRoot, options);
+        SyncPlan plan = BuildSyncPlan(srcItems, destItems, srcRoot, destRoot, options, callbacks);
         report.previewItems = BuildPreviewList(plan, destMap);
         report.analysis = AnalyzeSyncPlan(plan, destMap);
 

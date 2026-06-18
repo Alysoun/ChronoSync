@@ -4,6 +4,7 @@
 #include <fstream>
 #include <sstream>
 #include <iomanip>
+#include <cstring>
 #include <algorithm>
 #include <chrono>
 #include <unordered_map>
@@ -404,54 +405,71 @@ namespace ChronoSync {
         }
     }
 
+    static constexpr size_t kMaxSnapshotEntries = 25000;
+
     bool SyncHistoryIO::RecordRun(const std::wstring& source,
                                   const std::wstring& destination,
                                   const SyncOptions& options,
                                   const SyncStats& stats,
                                   std::wstring& errorMessage) {
-        std::error_code ec;
-        if (!std::filesystem::exists(destination, ec)) {
-            errorMessage = L"Destination does not exist; history not recorded.";
-            return false;
-        }
-
-        std::wstring timestampUtc = FormatUtcNow();
-        std::wstring runId = MakeRunId(timestampUtc);
-
-        DestinationSnapshot snapshot = BuildSnapshotFromScan(destination, options, runId, timestampUtc);
-        if (!WriteFileUtf8(SnapshotPath(destination, runId), SerializeSnapshot(snapshot), errorMessage)) {
-            return false;
-        }
-
-        SyncHistoryEntry entry;
-        entry.id = runId;
-        entry.timestampUtc = timestampUtc;
-        entry.source = source;
-        entry.destination = destination;
-        entry.filesCopied = stats.filesCopied;
-        entry.filesSkipped = stats.filesSkipped;
-        entry.itemsDeleted = stats.itemsDeleted;
-        entry.dirsCreated = stats.dirsCreated;
-        entry.totalBytesCopied = stats.totalBytesCopied;
-        entry.snapshotId = runId;
-
-        std::vector<SyncHistoryEntry> entries;
-        std::string indexJson;
-        auto indexFile = IndexPath(destination);
-        if (std::filesystem::exists(indexFile, ec)) {
-            if (!ReadFileUtf8(indexFile, indexJson, errorMessage)) {
+        try {
+            std::error_code ec;
+            if (!std::filesystem::exists(destination, ec)) {
+                errorMessage = L"Destination does not exist; history not recorded.";
                 return false;
             }
-            LoadEntriesFromJson(indexJson, entries);
-        }
 
-        entries.push_back(std::move(entry));
-        PruneOldRuns(entries, destination);
+            std::wstring timestampUtc = FormatUtcNow();
+            std::wstring runId = MakeRunId(timestampUtc);
 
-        if (!WriteFileUtf8(indexFile, SerializeIndex(entries), errorMessage)) {
+            SyncHistoryEntry entry;
+            entry.id = runId;
+            entry.timestampUtc = timestampUtc;
+            entry.source = source;
+            entry.destination = destination;
+            entry.filesCopied = stats.filesCopied;
+            entry.filesSkipped = stats.filesSkipped;
+            entry.itemsDeleted = stats.itemsDeleted;
+            entry.dirsCreated = stats.dirsCreated;
+            entry.totalBytesCopied = stats.totalBytesCopied;
+            entry.snapshotId = runId;
+
+            DestinationSnapshot snapshot = BuildSnapshotFromScan(destination, options, runId, timestampUtc);
+            if (snapshot.entries.size() <= kMaxSnapshotEntries) {
+                if (!WriteFileUtf8(SnapshotPath(destination, runId), SerializeSnapshot(snapshot), errorMessage)) {
+                    return false;
+                }
+            } else {
+                entry.snapshotId.clear();
+                errorMessage = L"Run logged without full snapshot (tree has " +
+                               std::to_wstring(snapshot.entries.size()) + L" items).";
+            }
+
+            std::vector<SyncHistoryEntry> entries;
+            std::string indexJson;
+            auto indexFile = IndexPath(destination);
+            if (std::filesystem::exists(indexFile, ec)) {
+                if (!ReadFileUtf8(indexFile, indexJson, errorMessage)) {
+                    return false;
+                }
+                LoadEntriesFromJson(indexJson, entries);
+            }
+
+            entries.push_back(std::move(entry));
+            PruneOldRuns(entries, destination);
+
+            if (!WriteFileUtf8(indexFile, SerializeIndex(entries), errorMessage)) {
+                return false;
+            }
+            return true;
+        } catch (const std::exception& ex) {
+            errorMessage = L"History recording failed: " +
+                           std::wstring(ex.what(), ex.what() + std::strlen(ex.what()));
+            return false;
+        } catch (...) {
+            errorMessage = L"History recording failed with an unexpected error.";
             return false;
         }
-        return true;
     }
 
     bool SyncHistoryIO::LoadEntries(const std::wstring& destination,
@@ -509,6 +527,12 @@ namespace ChronoSync {
                                      const std::wstring& snapshotId,
                                      DestinationSnapshot& snapshot,
                                      std::wstring& errorMessage) {
+        if (snapshotId.empty()) {
+            errorMessage = L"No snapshot was saved for this run. Large destination trees "
+                           L"(over 25,000 items) are logged in the index only.";
+            return false;
+        }
+
         std::string json;
         if (!ReadFileUtf8(SnapshotPath(destination, snapshotId), json, errorMessage)) {
             return false;

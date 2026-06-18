@@ -16,6 +16,7 @@ struct PreviewWindowContext {
     HWND hwndFilter = NULL;
     HWND lblSummary = NULL;
     HWND btnExport = NULL;
+    HWND btnCopy = NULL;
     HWND btnClose = NULL;
     int sortColumn = -1;
     bool sortAscending = true;

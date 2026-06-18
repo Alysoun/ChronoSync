@@ -45,6 +45,7 @@ namespace ChronoSync {
         std::function<void(const std::wstring& relPath, bool isDirectory)> onDeleteItem;
         std::function<void(const std::wstring& relPath, const std::wstring& errorMessage)> onDeleteFailed;
         std::function<void(const std::wstring& message, bool isError)> onLog;
+        std::function<void(const std::wstring& relPath, unsigned long long bytesHashed, unsigned long long fileSize, bool hashingSource)> onHashProgress;
     };
 
     // Statistics about the completed sync run

@@ -28,6 +28,8 @@ add_executable(ChronoSync WIN32
     src/MainWindow.h
     src/HistoryWindow.cpp
     src/HistoryWindow.h
+    src/SyncHashCache.cpp
+    src/SyncHashCache.h
     src/SyncHistory.cpp
     src/SyncHistory.h
     src/SyncEngine.cpp
@@ -46,6 +48,8 @@ add_executable(ChronoSync WIN32
     src/SyncProfile.h
     src/FileHash.cpp
     src/FileHash.h
+    src/WinPath.cpp
+    src/WinPath.h
     src/SyncJob.cpp
     src/SyncJob.h
     src/NetworkShare.cpp
@@ -56,6 +60,8 @@ add_executable(ChronoSync WIN32
     src/TaskScheduler.h
     src/CliRunner.cpp
     src/CliRunner.h
+    src/ChronoSync.rc
+    src/resource.h
 )
 target_include_directories(ChronoSync PRIVATE src)
 
@@ -68,6 +74,8 @@ add_executable(ChronoSyncTests
     src/SyncPlan.h
     src/SyncPlanAnalysis.cpp
     src/SyncPlanAnalysis.h
+    src/SyncHashCache.cpp
+    src/SyncHashCache.h
     src/SyncHistory.cpp
     src/SyncHistory.h
     src/SyncExecutor.cpp
@@ -82,13 +90,15 @@ add_executable(ChronoSyncTests
     src/NetworkShare.h
     src/DeltaCopy.cpp
     src/DeltaCopy.h
+    src/WinPath.cpp
+    src/WinPath.h
 )
 target_include_directories(ChronoSyncTests PRIVATE src)
 
 # Compiler-specific settings & libraries
 if(MSVC)
-    target_compile_options(ChronoSync PRIVATE /W4 /WX /EHsc)
-    target_compile_options(ChronoSyncTests PRIVATE /W4 /WX /EHsc)
+    target_compile_options(ChronoSync PRIVATE /W4 /WX /EHsc /utf-8)
+    target_compile_options(ChronoSyncTests PRIVATE /W4 /WX /EHsc /utf-8)
     target_link_libraries(ChronoSync PRIVATE dwmapi.lib comctl32.lib ole32.lib shell32.lib bcrypt.lib mpr.lib uxtheme.lib)
 else()
     target_compile_options(ChronoSync PRIVATE -Wall -Wextra -Werror)

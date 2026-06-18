@@ -2,6 +2,8 @@
 #include "SyncBackup.h"
 #include "NetworkShare.h"
 #include "DeltaCopy.h"
+#include "FileHash.h"
+#include "WinPath.h"
 #include <windows.h>
 
 #ifndef IO_REPARSE_TAG_MOUNT_POINT
@@ -52,7 +54,7 @@ namespace ChronoSync {
 
         for (const auto& plannedDelete : itemsToDelete) {
             const auto& item = plannedDelete.item;
-            std::filesystem::path fullDestPath = destRoot / item.relativePath;
+            std::filesystem::path fullDestPath = WinPath::Join(destRoot, item.relativePath);
 
             if (callbacks.onDeleteItem) {
                 callbacks.onDeleteItem(item.relativePath, item.isDirectory);
@@ -87,8 +89,8 @@ namespace ChronoSync {
                         backupFolderCreated = true;
                     }
 
-                    std::filesystem::path trashPath = trashRoot / item.relativePath;
-                    std::filesystem::create_directories(trashPath.parent_path(), ec);
+                    std::filesystem::path trashPath = WinPath::Join(trashRoot, item.relativePath);
+                    WinPath::CreateParentDirectories(trashRoot, item.relativePath, ec);
                     std::filesystem::rename(fullDestPath, trashPath, ec);
                     if (!ec) {
                         stats.itemsDeleted++;
@@ -126,15 +128,21 @@ namespace ChronoSync {
                                        const std::vector<SyncItem>& dirsToCreate,
                                        const SyncCallbacks& callbacks,
                                        SyncStats& stats) {
-        std::error_code ec;
         for (const auto& dir : dirsToCreate) {
-            std::filesystem::path destPath = destRoot / dir.relativePath;
-            std::filesystem::create_directories(destPath, ec);
-            if (!ec) {
-                stats.dirsCreated++;
-            } else if (callbacks.onLog) {
-                std::wstring errStr(ec.message().begin(), ec.message().end());
-                callbacks.onLog(L"Failed to create directory " + dir.relativePath + L": " + errStr, true);
+            try {
+                std::error_code ec;
+                if (WinPath::CreateDirectories(destRoot, dir.relativePath, ec)) {
+                    stats.dirsCreated++;
+                } else if (callbacks.onLog) {
+                    std::wstring errStr(ec.message().begin(), ec.message().end());
+                    callbacks.onLog(L"Failed to create directory " + dir.relativePath + L": " + errStr, true);
+                }
+            } catch (const std::exception& ex) {
+                if (callbacks.onLog) {
+                    std::string err = ex.what() ? ex.what() : "path error";
+                    callbacks.onLog(L"Failed to create directory " + dir.relativePath + L": " +
+                                    std::wstring(err.begin(), err.end()), true);
+                }
             }
         }
     }
@@ -146,22 +154,24 @@ namespace ChronoSync {
                                       const std::vector<SyncItem>& filesToCopy,
                                       size_t linkCount,
                                       const SyncCallbacks& callbacks,
+                                      Sha256Session* verifySession,
                                       SyncStats& stats) {
-        std::error_code ec;
         std::wstring networkError;
 
         for (size_t i = 0; i < filesToCopy.size(); ++i) {
             const auto& fileItem = filesToCopy[i];
-            std::filesystem::path srcPath = srcRoot / fileItem.relativePath;
-            std::filesystem::path destPath = destRoot / fileItem.relativePath;
-            std::filesystem::path tmpPath = destPath;
-            tmpPath += L".chrono_tmp";
+
+            try {
+            std::filesystem::path srcPath = WinPath::Join(srcRoot, fileItem.relativePath);
+            std::filesystem::path destPath = WinPath::Join(destRoot, fileItem.relativePath);
+            std::filesystem::path tmpPath = std::filesystem::path(destPath.wstring() + L".chrono_tmp");
 
             if (callbacks.onCopyStart) {
                 callbacks.onCopyStart(fileItem.relativePath, fileItem.fileSize, i + 1, filesToCopy.size() + linkCount);
             }
 
-            std::filesystem::create_directories(destPath.parent_path(), ec);
+            std::error_code ec;
+            WinPath::CreateParentDirectories(destRoot, fileItem.relativePath, ec);
             std::filesystem::remove(tmpPath, ec);
 
             bool copySuccess = false;
@@ -236,9 +246,9 @@ namespace ChronoSync {
 
                 bool copyOk = true;
                 std::wstring verifyError;
-                if (options.verifyAfterCopy || options.compareMode == CompareMode::Sha256) {
+                if (options.verifyAfterCopy) {
                     stats.filesVerified++;
-                    if (!VerifyCopiedFile(srcPath, destPath)) {
+                    if (!VerifyCopiedFile(srcPath, destPath, verifySession, &callbacks)) {
                         copyOk = false;
                         verifyError = L"SHA256 verification failed after copy";
                         stats.verifyFailures++;
@@ -263,10 +273,64 @@ namespace ChronoSync {
             } else if (callbacks.onCopyComplete) {
                 callbacks.onCopyComplete(fileItem.relativePath, false, copyError);
             }
+            } catch (const std::exception& ex) {
+                std::string err = ex.what() ? ex.what() : "path error";
+                std::wstring errWide(err.begin(), err.end());
+                if (callbacks.onCopyComplete) {
+                    callbacks.onCopyComplete(fileItem.relativePath, false, errWide);
+                }
+                if (callbacks.onLog) {
+                    callbacks.onLog(L"Failed to copy " + fileItem.relativePath + L": " + errWide, true);
+                }
+            }
         }
     }
 
-    static void ExecuteCreateLinksPhase(const std::filesystem::path& destRoot,
+    static std::wstring StripExtendedPrefix(std::wstring path) {
+        if (path.rfind(L"\\\\?\\UNC\\", 0) == 0) {
+            return L"\\\\" + path.substr(8);
+        }
+        if (path.rfind(L"\\\\?\\", 0) == 0) {
+            return path.substr(4);
+        }
+        return path;
+    }
+
+    static std::wstring ResolveDestLinkTarget(const std::filesystem::path& srcRoot,
+                                              const std::filesystem::path& destRoot,
+                                              const std::wstring& linkRelPath,
+                                              const std::wstring& reparseTarget) {
+        if (reparseTarget.empty()) {
+            return {};
+        }
+
+        std::error_code ec;
+        std::filesystem::path srcLinkParent = WinPath::Join(srcRoot, linkRelPath).parent_path();
+        std::filesystem::path target(reparseTarget);
+        if (!target.is_absolute()) {
+            target = (srcLinkParent / target).lexically_normal();
+        }
+
+        std::filesystem::path resolved = std::filesystem::weakly_canonical(target, ec);
+        if (ec) {
+            resolved = target.lexically_normal();
+        }
+
+        std::wstring srcBase = StripExtendedPrefix(srcRoot.wstring());
+        std::wstring destBase = StripExtendedPrefix(destRoot.wstring());
+        std::wstring resolvedW = resolved.wstring();
+
+        if (resolvedW.size() >= srcBase.size() &&
+            _wcsnicmp(resolvedW.c_str(), srcBase.c_str(), static_cast<unsigned>(srcBase.size())) == 0 &&
+            (resolvedW.size() == srcBase.size() || resolvedW[srcBase.size()] == L'\\')) {
+            return destBase + resolvedW.substr(srcBase.size());
+        }
+
+        return resolvedW;
+    }
+
+    static void ExecuteCreateLinksPhase(const std::filesystem::path& srcRoot,
+                                        const std::filesystem::path& destRoot,
                                         const std::vector<SyncItem>& linksToCreate,
                                         size_t fileCount,
                                         const SyncCallbacks& callbacks,
@@ -275,13 +339,24 @@ namespace ChronoSync {
 
         for (size_t i = 0; i < linksToCreate.size(); ++i) {
             const auto& linkItem = linksToCreate[i];
-            std::filesystem::path destPath = destRoot / linkItem.relativePath;
+            try {
+            std::filesystem::path destPath = WinPath::Join(destRoot, linkItem.relativePath);
+            std::wstring destTarget = ResolveDestLinkTarget(srcRoot, destRoot, linkItem.relativePath, linkItem.reparseTarget);
+            if (destTarget.empty()) {
+                if (callbacks.onCopyComplete) {
+                    callbacks.onCopyComplete(linkItem.relativePath, false, L"Empty or invalid link target");
+                }
+                if (callbacks.onLog) {
+                    callbacks.onLog(L"Skipped link with empty target: " + linkItem.relativePath, true);
+                }
+                continue;
+            }
 
             if (callbacks.onCopyStart) {
                 callbacks.onCopyStart(linkItem.relativePath, 0, fileCount + i + 1, fileCount + linksToCreate.size());
             }
 
-            std::filesystem::create_directories(destPath.parent_path(), ec);
+            WinPath::CreateParentDirectories(destRoot, linkItem.relativePath, ec);
 
             bool success = false;
             std::wstring linkTypeStr;
@@ -289,7 +364,7 @@ namespace ChronoSync {
 
             if (linkItem.reparseTag == IO_REPARSE_TAG_MOUNT_POINT) {
                 linkTypeStr = L"junction";
-                std::wstring cmdArgs = L"cmd.exe /c mklink /j \"" + destPath.wstring() + L"\" \"" + linkItem.reparseTarget + L"\"";
+                std::wstring cmdArgs = L"cmd.exe /c mklink /j \"" + destPath.wstring() + L"\" \"" + destTarget + L"\"";
                 std::vector<wchar_t> cmdBuffer(cmdArgs.begin(), cmdArgs.end());
                 cmdBuffer.push_back(L'\0');
 
@@ -329,9 +404,9 @@ namespace ChronoSync {
             } else {
                 linkTypeStr = L"symlink";
                 if (linkItem.isDirectory) {
-                    std::filesystem::create_directory_symlink(linkItem.reparseTarget, destPath, ec);
+                    std::filesystem::create_directory_symlink(destTarget, destPath, ec);
                 } else {
-                    std::filesystem::create_symlink(linkItem.reparseTarget, destPath, ec);
+                    std::filesystem::create_symlink(destTarget, destPath, ec);
                 }
                 if (!ec) {
                     success = true;
@@ -350,14 +425,31 @@ namespace ChronoSync {
                     callbacks.onCopyComplete(linkItem.relativePath, true, L"");
                 }
                 if (callbacks.onLog) {
-                    callbacks.onLog(L"Created " + linkTypeStr + L": " + linkItem.relativePath + L" -> " + linkItem.reparseTarget, false);
+                    callbacks.onLog(L"Created " + linkTypeStr + L": " + linkItem.relativePath + L" -> " + destTarget, false);
                 }
             } else {
                 if (callbacks.onCopyComplete) {
                     callbacks.onCopyComplete(linkItem.relativePath, false, errStr);
                 }
                 if (callbacks.onLog) {
-                    callbacks.onLog(L"Failed to create " + linkTypeStr + L": " + linkItem.relativePath + L" -> " + linkItem.reparseTarget + L". Error: " + errStr, true);
+                    callbacks.onLog(L"Failed to create " + linkTypeStr + L": " + linkItem.relativePath + L" -> " + destTarget + L". Error: " + errStr, true);
+                }
+            }
+            } catch (const std::exception& ex) {
+                std::string err = ex.what() ? ex.what() : "link error";
+                std::wstring errWide(err.begin(), err.end());
+                if (callbacks.onCopyComplete) {
+                    callbacks.onCopyComplete(linkItem.relativePath, false, errWide);
+                }
+                if (callbacks.onLog) {
+                    callbacks.onLog(L"Failed to create link " + linkItem.relativePath + L": " + errWide, true);
+                }
+            } catch (...) {
+                if (callbacks.onCopyComplete) {
+                    callbacks.onCopyComplete(linkItem.relativePath, false, L"Unexpected link error");
+                }
+                if (callbacks.onLog) {
+                    callbacks.onLog(L"Failed to create link " + linkItem.relativePath + L": unexpected error", true);
                 }
             }
         }
@@ -370,10 +462,13 @@ namespace ChronoSync {
                          const SyncPlan& plan,
                          const SyncCallbacks& callbacks,
                          SyncStats& stats) {
+        Sha256Session verifySession;
+        Sha256Session* verifyPtr = (options.verifyAfterCopy && verifySession.IsValid()) ? &verifySession : nullptr;
+
         ExecutePrunePhase(destRoot, options, plan.itemsToDelete, callbacks, stats);
         ExecuteCreateDirsPhase(destRoot, plan.dirsToCreate, callbacks, stats);
-        ExecuteCopyFilesPhase(srcRoot, destRoot, destination, options, plan.filesToCopy, plan.linksToCreate.size(), callbacks, stats);
-        ExecuteCreateLinksPhase(destRoot, plan.linksToCreate, plan.filesToCopy.size(), callbacks, stats);
+        ExecuteCopyFilesPhase(srcRoot, destRoot, destination, options, plan.filesToCopy, plan.linksToCreate.size(), callbacks, verifyPtr, stats);
+        ExecuteCreateLinksPhase(srcRoot, destRoot, plan.linksToCreate, plan.filesToCopy.size(), callbacks, stats);
     }
 
 } // namespace ChronoSync

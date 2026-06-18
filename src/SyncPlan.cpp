@@ -1,5 +1,6 @@
 #include "SyncPlan.h"
 #include "FileHash.h"
+#include "WinPath.h"
 #include <windows.h>
 #include <array>
 #include <unordered_set>
@@ -15,7 +16,10 @@ namespace ChronoSync {
                             const std::filesystem::path& destPath,
                             const SyncItem& srcItem,
                             const SyncItem& destItem,
-                            CompareMode mode) {
+                            CompareMode mode,
+                            Sha256Session* hashSession,
+                            SyncHashCache* hashCache,
+                            const SyncCallbacks* callbacks) {
         if (srcItem.fileSize != destItem.fileSize) {
             return true;
         }
@@ -25,10 +29,35 @@ namespace ChronoSync {
             return cmp > 0;
         }
 
+        if (!hashSession || !hashSession->IsValid()) {
+            return true;
+        }
+
+        Sha256Progress progress;
+        progress.onProgress = [&](unsigned long long bytesHashed, unsigned long long fileSize) {
+            if (callbacks && callbacks->onHashProgress) {
+                callbacks->onHashProgress(srcItem.relativePath, bytesHashed, fileSize, true);
+            }
+        };
+
         std::array<uint8_t, 32> srcHash{};
         std::array<uint8_t, 32> destHash{};
-        if (!FileHash::Sha256File(srcPath.wstring(), srcHash) ||
-            !FileHash::Sha256File(destPath.wstring(), destHash)) {
+
+        bool srcOk = hashSession->HashFile(srcPath.wstring(), srcHash, &progress);
+        if (!srcOk) {
+            return true;
+        }
+
+        progress.onProgress = [&](unsigned long long bytesHashed, unsigned long long fileSize) {
+            if (callbacks && callbacks->onHashProgress) {
+                callbacks->onHashProgress(srcItem.relativePath, bytesHashed, fileSize, false);
+            }
+        };
+
+        bool destOk = hashCache
+            ? hashCache->GetOrCompute(srcItem.relativePath, destItem, destPath, *hashSession, destHash, &progress)
+            : hashSession->HashFile(destPath.wstring(), destHash, &progress);
+        if (!destOk) {
             return true;
         }
         return !FileHash::HashesEqual(srcHash, destHash);
@@ -38,9 +67,18 @@ namespace ChronoSync {
                            const std::vector<SyncItem>& destItems,
                            const std::filesystem::path& srcRoot,
                            const std::filesystem::path& destRoot,
-                           const SyncOptions& options) {
+                           const SyncOptions& options,
+                           const SyncCallbacks& callbacks) {
         SyncPlan plan;
         const bool prune = options.prune;
+
+        Sha256Session hashSession;
+        SyncHashCache hashCache;
+        const bool useSha256 = options.compareMode == CompareMode::Sha256 && hashSession.IsValid();
+        if (useSha256 && std::filesystem::exists(destRoot)) {
+            std::wstring cacheError;
+            hashCache.Load(destRoot, cacheError);
+        }
 
         std::unordered_map<std::wstring, SyncItem> destMap;
         for (const auto& item : destItems) {
@@ -86,9 +124,12 @@ namespace ChronoSync {
                         plan.itemsToDelete.push_back({ destItem, DeleteReason::Replace });
                         needsCopy = true;
                     } else {
-                        std::filesystem::path srcPath = srcRoot / srcItem.relativePath;
-                        std::filesystem::path destPath = destRoot / srcItem.relativePath;
-                        needsCopy = FileContentsDiffer(srcPath, destPath, srcItem, destItem, options.compareMode);
+                        std::filesystem::path srcPath = WinPath::Join(srcRoot, srcItem.relativePath);
+                        std::filesystem::path destPath = WinPath::Join(destRoot, srcItem.relativePath);
+                        needsCopy = FileContentsDiffer(srcPath, destPath, srcItem, destItem, options.compareMode,
+                                                       useSha256 ? &hashSession : nullptr,
+                                                       useSha256 ? &hashCache : nullptr,
+                                                       &callbacks);
                     }
                 }
 
@@ -111,6 +152,11 @@ namespace ChronoSync {
         std::sort(plan.itemsToDelete.begin(), plan.itemsToDelete.end(), [](const PlannedDelete& a, const PlannedDelete& b) {
             return a.item.relativePath.length() > b.item.relativePath.length();
         });
+
+        if (useSha256) {
+            std::wstring cacheError;
+            hashCache.Save(destRoot, cacheError);
+        }
 
         return plan;
     }

@@ -25,6 +25,12 @@ namespace ChronoSync {
         unsigned long long totalBytes = 0;
     };
 
+    struct PlannedRemovalEntry {
+        std::wstring relativePath;
+        std::wstring itemKind;
+        DeleteReason reason = DeleteReason::Prune;
+    };
+
     struct SyncPlanAnalysis {
         size_t filesToCopyNew = 0;
         size_t filesToCopyUpdate = 0;
@@ -40,6 +46,7 @@ namespace ChronoSync {
         RiskLevel risk = RiskLevel::Low;
         std::vector<std::wstring> riskReasons;
         std::vector<LargestFileEntry> largestFiles;
+        std::vector<PlannedRemovalEntry> plannedRemovals;
         std::vector<FileTypeBucket> fileTypeBreakdown;
         std::vector<FileTypeBucket> extensionBreakdown;
     };

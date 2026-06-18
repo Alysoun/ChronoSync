@@ -51,11 +51,39 @@ namespace ChronoSync {
         return latest;
     }
 
-    bool VerifyCopiedFile(const std::filesystem::path& srcPath, const std::filesystem::path& destPath) {
+    bool VerifyCopiedFile(const std::filesystem::path& srcPath,
+                          const std::filesystem::path& destPath,
+                          Sha256Session* session,
+                          const SyncCallbacks* callbacks) {
+        Sha256Session localSession;
+        Sha256Session* activeSession = session;
+        if (!activeSession || !activeSession->IsValid()) {
+            if (!localSession.IsValid()) {
+                return false;
+            }
+            activeSession = &localSession;
+        }
+
+        Sha256Progress progress;
+        progress.onProgress = [&](unsigned long long bytesHashed, unsigned long long fileSize) {
+            if (callbacks && callbacks->onHashProgress) {
+                callbacks->onHashProgress(srcPath.filename().wstring(), bytesHashed, fileSize, true);
+            }
+        };
+
         std::array<uint8_t, 32> srcHash{};
         std::array<uint8_t, 32> destHash{};
-        if (!FileHash::Sha256File(srcPath.wstring(), srcHash) ||
-            !FileHash::Sha256File(destPath.wstring(), destHash)) {
+        if (!activeSession->HashFile(srcPath.wstring(), srcHash, &progress)) {
+            return false;
+        }
+
+        progress.onProgress = [&](unsigned long long bytesHashed, unsigned long long fileSize) {
+            if (callbacks && callbacks->onHashProgress) {
+                callbacks->onHashProgress(srcPath.filename().wstring(), bytesHashed, fileSize, false);
+            }
+        };
+
+        if (!activeSession->HashFile(destPath.wstring(), destHash, &progress)) {
             return false;
         }
         return FileHash::HashesEqual(srcHash, destHash);

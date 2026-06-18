@@ -15,11 +15,21 @@
 
 #include <uxtheme.h>
 #include <dwmapi.h>
+#include <windowsx.h>
 #include <sstream>
 #include <iomanip>
 #include <memory>
-#include <thread>
 #include <algorithm>
+#include <thread>
+
+static constexpr int kLogSplitterH = 6;
+static constexpr int kMinQueueH = 48;
+static constexpr int kMinLogH = 100;
+static constexpr int kMaxLogHeightBias = 500;
+
+static bool g_logSplitterDragging = false;
+static int g_logSplitterDragStartY = 0;
+static int g_logSplitterBiasStart = 0;
 
 static std::wstring FormatRiskSummary(const ChronoSync::SyncPlanAnalysis& analysis) {
     std::wstringstream ss;
@@ -38,6 +48,13 @@ static std::wstring FormatRiskSummary(const ChronoSync::SyncPlanAnalysis& analys
     }
     if (removals > 0) {
         ss << L"  |  Removals: " << removals;
+        if (analysis.deletesReplace > 0 && analysis.deletesReplace <= 3) {
+            for (const auto& entry : analysis.plannedRemovals) {
+                if (entry.reason == ChronoSync::DeleteReason::Replace) {
+                    ss << L" (" << entry.relativePath << L")";
+                }
+            }
+        }
     }
     if (copies == 0 && removals == 0 && analysis.totalBytesToTransfer == 0) {
         ss << L"  |  Already in sync";
@@ -56,7 +73,7 @@ static void SetRiskIndicator(const ChronoSync::SyncPlanAnalysis& analysis) {
 static void ClearRiskIndicator() {
     g_HasCachedPlanAnalysis = false;
     if (g_hWndRiskLabel) {
-        SetWindowTextW(g_hWndRiskLabel, L"Risk: —  |  Run Analyze Plan for impact summary");
+        SetWindowTextW(g_hWndRiskLabel, L"Risk: \u2014  |  Run Analyze Plan for impact summary");
     }
 }
 
@@ -83,8 +100,66 @@ static void ApplyReadableTheme(HWND hWnd) {
     styleButton(g_hWndSaveQueueBtn);
     styleButton(g_hWndLoadQueueBtn);
 
+    if (g_hWndCopyLogBtn) {
+        styleButton(g_hWndCopyLogBtn);
+    }
+
     SendMessageW(g_hWndQueueList, LB_SETITEMHEIGHT, 0, MAKELPARAM(24, 0));
     (void)hWnd;
+}
+
+static bool IsLogScrolledToBottom(HWND hwnd) {
+    if (!hwnd) {
+        return true;
+    }
+    SCROLLINFO si = {};
+    si.cbSize = sizeof(si);
+    si.fMask = SIF_ALL;
+    if (!GetScrollInfo(hwnd, SB_VERT, &si)) {
+        return true;
+    }
+    if (si.nMax <= 0) {
+        return true;
+    }
+    int bottomPos = si.nPos + static_cast<int>(si.nPage);
+    return bottomPos >= si.nMax - 1;
+}
+
+static void ScrollLogToBottom(HWND hwnd) {
+    if (!hwnd) {
+        return;
+    }
+    int len = GetWindowTextLengthW(hwnd);
+    SendMessageW(hwnd, EM_SETSEL, len, len);
+    SendMessageW(hwnd, EM_SCROLLCARET, 0, 0);
+}
+
+static LRESULT CALLBACK LogEditSubclassProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
+    if (message == WM_KEYDOWN && HandleReadOnlyEditAccelerator(hwnd, wParam)) {
+        if (wParam == 'A' || wParam == 'a') {
+            g_logFollowTail = false;
+        }
+        return 0;
+    }
+
+    LRESULT result = CallWindowProcW(g_logEditOrigProc, hwnd, message, wParam, lParam);
+
+    switch (message) {
+        case WM_VSCROLL:
+        case WM_KEYDOWN:
+        case WM_LBUTTONUP:
+            g_logFollowTail = IsLogScrolledToBottom(hwnd);
+            break;
+        default:
+            break;
+    }
+
+    return result;
+}
+
+static void ClearOperationLog() {
+    SetWindowTextW(g_hWndLogEdit, L"");
+    g_logFollowTail = true;
 }
 
 static void LayoutMainWindow(HWND hWnd, int cx, int cy) {
@@ -167,11 +242,20 @@ static void LayoutMainWindow(HWND hWnd, int cx, int cy) {
     moveLabel(FindWindowExW(hWnd, NULL, L"STATIC", L"Sync Queue:"), y, 160);
     y += 24;
 
-    const int bottomReserve = 22 + 28 + 30 + 24 + 80 + m;
-    int queueH = cy - y - bottomReserve - bh - UiTheme::SectionGap - UiTheme::RowGap;
-    if (queueH < 48) {
-        queueH = 48;
+    const int tailFixed = UiTheme::RowGap + bh + UiTheme::SectionGap + 22 + 26 + 28 + UiTheme::RowGap + 24 +
+                          kLogSplitterH;
+    int flexH = cy - y - tailFixed - m;
+    if (flexH < kMinQueueH + kMinLogH) {
+        flexH = kMinQueueH + kMinLogH;
     }
+
+    int logH = std::clamp(120 + g_logHeightBias, kMinLogH, flexH - kMinQueueH);
+    int queueH = flexH - logH;
+    if (queueH < kMinQueueH) {
+        queueH = kMinQueueH;
+        logH = flexH - queueH;
+    }
+
     MoveWindow(g_hWndQueueList, m, y, w, queueH, TRUE);
     y += queueH + UiTheme::RowGap;
 
@@ -196,12 +280,15 @@ static void LayoutMainWindow(HWND hWnd, int cx, int cy) {
     y += 28;
 
     moveLabel(FindWindowExW(hWnd, NULL, L"STATIC", L"Operation Log:"), y, 160);
+    const int copyLogBtnW = 72;
+    moveBtn(g_hWndCopyLogBtn, m + w - copyLogBtnW, y - 2, copyLogBtnW, bh);
     y += 24;
 
-    int logH = cy - y - m;
-    if (logH < 60) {
-        logH = 60;
+    if (g_hWndLogSplitter) {
+        MoveWindow(g_hWndLogSplitter, m, y, w, kLogSplitterH, TRUE);
+        y += kLogSplitterH;
     }
+
     MoveWindow(g_hWndLogEdit, m, y, w, logH, TRUE);
 }
 
@@ -399,7 +486,7 @@ static void CreateControls(HWND hWnd, HINSTANCE hInstance) {
                                         m, y, w, 22, hWnd, (HMENU)ID_STATUS_LABEL, hInstance, NULL);
     y += 26;
     g_hWndRiskLabel = CreateWindowExW(0, L"STATIC",
-                                      L"Risk: —  |  Run Analyze Plan for impact summary",
+                                      L"Risk: \u2014  |  Run Analyze Plan for impact summary",
                                       WS_CHILD | WS_VISIBLE,
                                       m, y, w / 2, 22, hWnd, (HMENU)ID_RISK_LABEL, hInstance, NULL);
     g_hWndProgressBar = CreateWindowExW(0, PROGRESS_CLASSW, L"", WS_CHILD | WS_VISIBLE,
@@ -408,10 +495,21 @@ static void CreateControls(HWND hWnd, HINSTANCE hInstance) {
 
     HWND lblLog = CreateWindowExW(0, L"STATIC", L"Operation Log:", WS_CHILD | WS_VISIBLE,
                                   m, y, 160, 22, hWnd, NULL, hInstance, NULL);
+    const int copyLogBtnW = 72;
+    g_hWndCopyLogBtn = CreateWindowExW(0, L"BUTTON", L"Copy", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                                       m + w - copyLogBtnW, y - 2, copyLogBtnW, bh,
+                                       hWnd, (HMENU)ID_COPY_LOG_BUTTON, hInstance, NULL);
     y += 24;
+    g_hWndLogSplitter = CreateWindowExW(0, L"STATIC", NULL,
+                                        WS_CHILD | WS_VISIBLE | SS_ETCHEDHORZ,
+                                        m, y, w, kLogSplitterH, hWnd, (HMENU)ID_LOG_SPLITTER, hInstance, NULL);
+    y += kLogSplitterH;
     g_hWndLogEdit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"",
                                     WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY | WS_VSCROLL,
                                     m, y, w, 120, hWnd, (HMENU)ID_LOG_EDIT, hInstance, NULL);
+    SendMessageW(g_hWndLogEdit, EM_SETLIMITTEXT, 200000, 0);
+    g_logEditOrigProc = reinterpret_cast<WNDPROC>(SetWindowLongPtrW(
+        g_hWndLogEdit, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(LogEditSubclassProc)));
 
     auto setLabelFont = [&](HWND hwnd) {
         if (hwnd) {
@@ -458,6 +556,7 @@ static void CreateControls(HWND hWnd, HINSTANCE hInstance) {
     setUIFont(g_hWndClearQueueBtn);
     setUIFont(g_hWndSaveQueueBtn);
     setUIFont(g_hWndLoadQueueBtn);
+    setUIFont(g_hWndCopyLogBtn);
     setUIFont(g_hWndStatusLabel);
     setUIFont(g_hWndRiskLabel);
     SendMessageW(g_hWndLogEdit, WM_SETFONT, (WPARAM)g_hFontLog, TRUE);
@@ -509,12 +608,65 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             }
             break;
         }
+        case WM_SETCURSOR: {
+            if ((HWND)wParam == g_hWndLogSplitter && LOWORD(lParam) == HTCLIENT) {
+                SetCursor(LoadCursor(NULL, IDC_SIZENS));
+                return TRUE;
+            }
+            break;
+        }
+        case WM_LBUTTONDOWN: {
+            POINT pt = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+            HWND hit = ChildWindowFromPointEx(hWnd, pt, CWP_SKIPINVISIBLE);
+            if (hit == g_hWndLogSplitter) {
+                g_logSplitterDragging = true;
+                g_logSplitterDragStartY = pt.y;
+                g_logSplitterBiasStart = g_logHeightBias;
+                SetCapture(hWnd);
+                return 0;
+            }
+            break;
+        }
+        case WM_MOUSEMOVE: {
+            if (g_logSplitterDragging) {
+                int dy = GET_Y_LPARAM(lParam) - g_logSplitterDragStartY;
+                g_logHeightBias = std::clamp(g_logSplitterBiasStart + dy, 0, kMaxLogHeightBias);
+                RECT rc = {};
+                GetClientRect(hWnd, &rc);
+                LayoutMainWindow(hWnd, rc.right, rc.bottom);
+                return 0;
+            }
+            break;
+        }
+        case WM_MOUSEWHEEL: {
+            POINT pt = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+            HWND wheelTarget = WindowFromPoint(pt);
+            if (wheelTarget == g_hWndLogEdit || IsChild(g_hWndLogEdit, wheelTarget)) {
+                LRESULT wheelResult = DefWindowProcW(hWnd, message, wParam, lParam);
+                g_logFollowTail = IsLogScrolledToBottom(g_hWndLogEdit);
+                return wheelResult;
+            }
+            break;
+        }
+        case WM_LBUTTONUP: {
+            if (g_logSplitterDragging) {
+                g_logSplitterDragging = false;
+                ReleaseCapture();
+                return 0;
+            }
+            break;
+        }
         case WM_COMMAND: {
             int wmId = LOWORD(wParam);
 
             if (wmId == ID_PRUNE_LABEL) {
                 LRESULT state = SendMessageW(g_hWndPruneCheck, BM_GETCHECK, 0, 0);
                 SendMessageW(g_hWndPruneCheck, BM_SETCHECK, state == BST_CHECKED ? BST_UNCHECKED : BST_CHECKED, 0);
+                break;
+            }
+
+            if (wmId == ID_COPY_LOG_BUTTON) {
+                CopyEditContentToClipboard(g_hWndLogEdit);
                 break;
             }
 
@@ -542,7 +694,8 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
                 SetControlsState(FALSE);
                 EnableWindow(g_hWndUndoBtn, FALSE);
-                SetWindowTextW(g_hWndLogEdit, L"");
+                ClearOperationLog();
+                g_MsgRegistry.ResetForNewRun();
 
                 g_SyncRunning = true;
                 std::thread t(UndoThreadProc, destPath);
@@ -568,7 +721,8 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                 ChronoSync::SyncOptions options = GetSyncOptionsFromUI();
 
                 SetControlsState(FALSE);
-                SetWindowTextW(g_hWndLogEdit, L"");
+                ClearOperationLog();
+                g_MsgRegistry.ResetForNewRun();
 
                 g_SyncRunning = true;
                 std::thread t(PreviewThreadProc, sourcePath, destPath, options);
@@ -593,7 +747,8 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
                 ChronoSync::SyncOptions options = GetSyncOptionsFromUI();
                 SetControlsState(FALSE);
-                SetWindowTextW(g_hWndLogEdit, L"");
+                ClearOperationLog();
+                g_MsgRegistry.ResetForNewRun();
                 g_SyncRunning = true;
                 std::thread t(AnalyzeThreadProc, sourcePath, destPath, options);
                 t.detach();
@@ -619,7 +774,8 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                     break;
                 }
                 SetControlsState(FALSE);
-                SetWindowTextW(g_hWndLogEdit, L"");
+                ClearOperationLog();
+                g_MsgRegistry.ResetForNewRun();
                 g_SyncRunning = true;
                 std::thread t(QueueThreadProc, g_SyncJobQueue);
                 t.detach();
@@ -750,7 +906,8 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                 ChronoSync::SyncOptions options = GetSyncOptionsFromUI();
 
                 SetControlsState(FALSE);
-                SetWindowTextW(g_hWndLogEdit, L"");
+                ClearOperationLog();
+                g_MsgRegistry.ResetForNewRun();
 
                 g_SyncRunning = true;
                 std::thread t(SyncThreadProc, sourcePath, destPath, options);
@@ -805,34 +962,49 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             return (INT_PTR)g_hbrBackground;
         }
         case WM_SYNC_EVENT: {
-            std::vector<std::wstring> drainedLogs;
-            std::wstring drainedStatus;
-            int drainedProgress = 0;
-            bool statusChanged = false;
-            bool progressChanged = false;
+            BeginSyncUiDrain();
 
-            if (!g_MsgRegistry.Drain(drainedLogs, drainedStatus, drainedProgress, statusChanged, progressChanged)) {
-                break;
-            }
+            for (;;) {
+                std::vector<std::wstring> drainedLogs;
+                std::wstring drainedStatus;
+                int drainedProgress = 0;
+                bool statusChanged = false;
+                bool progressChanged = false;
 
-            if (!drainedLogs.empty()) {
-                SendMessageW(g_hWndLogEdit, WM_SETREDRAW, FALSE, 0);
-                for (const auto& log : drainedLogs) {
-                    int len = GetWindowTextLengthW(g_hWndLogEdit);
-                    SendMessageW(g_hWndLogEdit, EM_SETSEL, len, len);
-                    SendMessageW(g_hWndLogEdit, EM_REPLACESEL, FALSE, (LPARAM)log.c_str());
-                    SendMessageW(g_hWndLogEdit, EM_REPLACESEL, FALSE, (LPARAM)L"\r\n");
+                if (!g_MsgRegistry.Drain(drainedLogs, drainedStatus, drainedProgress, statusChanged, progressChanged)) {
+                    break;
                 }
-                SendMessageW(g_hWndLogEdit, WM_SETREDRAW, TRUE, 0);
-                InvalidateRect(g_hWndLogEdit, NULL, TRUE);
+
+                if (!drainedLogs.empty()) {
+                    SendMessageW(g_hWndLogEdit, WM_SETREDRAW, FALSE, 0);
+                    for (const auto& log : drainedLogs) {
+                        int len = GetWindowTextLengthW(g_hWndLogEdit);
+                        if (len > 120000) {
+                            SendMessageW(g_hWndLogEdit, EM_SETSEL, 0, 60000);
+                            SendMessageW(g_hWndLogEdit, EM_REPLACESEL, FALSE, (LPARAM)L"");
+                        }
+                        SendMessageW(g_hWndLogEdit, EM_SETSEL, len, len);
+                        SendMessageW(g_hWndLogEdit, EM_REPLACESEL, FALSE, (LPARAM)log.c_str());
+                        SendMessageW(g_hWndLogEdit, EM_REPLACESEL, FALSE, (LPARAM)L"\r\n");
+                    }
+                    SendMessageW(g_hWndLogEdit, WM_SETREDRAW, TRUE, 0);
+                    InvalidateRect(g_hWndLogEdit, NULL, TRUE);
+                    if (g_logFollowTail) {
+                        ScrollLogToBottom(g_hWndLogEdit);
+                    }
+                }
+
+                if (statusChanged) {
+                    SetWindowTextW(g_hWndStatusLabel, drainedStatus.c_str());
+                }
+
+                if (progressChanged) {
+                    SendMessageW(g_hWndProgressBar, PBM_SETPOS, drainedProgress, 0);
+                }
             }
 
-            if (statusChanged) {
-                SetWindowTextW(g_hWndStatusLabel, drainedStatus.c_str());
-            }
-
-            if (progressChanged) {
-                SendMessageW(g_hWndProgressBar, PBM_SETPOS, drainedProgress, 0);
+            if (g_MsgRegistry.HasPending()) {
+                RequestSyncUiEvent();
             }
             break;
         }
@@ -996,6 +1168,6 @@ bool RegisterMainWindowClass(HINSTANCE hInstance) {
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
     wc.hbrBackground = CreateSolidBrush(UiTheme::WindowBg);
     wc.lpszClassName = L"ChronoSyncMainWindow";
-    wc.hIcon = LoadIcon(NULL, IDI_APPLICATION);
+    ApplyAppWindowIcons(wc, hInstance);
     return RegisterClassExW(&wc) != 0;
 }

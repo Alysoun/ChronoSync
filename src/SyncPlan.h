@@ -2,6 +2,8 @@
 
 #include "SyncEngine.h"
 #include "SyncOptions.h"
+#include "FileHash.h"
+#include "SyncHashCache.h"
 #include <filesystem>
 #include <unordered_map>
 #include <vector>
@@ -30,13 +32,17 @@ namespace ChronoSync {
                             const std::filesystem::path& destPath,
                             const SyncItem& srcItem,
                             const SyncItem& destItem,
-                            CompareMode mode);
+                            CompareMode mode,
+                            Sha256Session* hashSession,
+                            SyncHashCache* hashCache,
+                            const SyncCallbacks* callbacks);
 
     SyncPlan BuildSyncPlan(const std::vector<SyncItem>& srcItems,
                            const std::vector<SyncItem>& destItems,
                            const std::filesystem::path& srcRoot,
                            const std::filesystem::path& destRoot,
-                           const SyncOptions& options);
+                           const SyncOptions& options,
+                           const SyncCallbacks& callbacks = {});
 
     std::vector<PreviewItem> BuildPreviewList(const SyncPlan& plan,
                                               const std::unordered_map<std::wstring, SyncItem>& destMap);
