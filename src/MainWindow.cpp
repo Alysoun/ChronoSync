@@ -5,6 +5,7 @@
 #include "SyncGuiWorker.h"
 #include "ScheduleDialog.h"
 #include "AnalysisWindow.h"
+#include "HistoryWindow.h"
 #include "PreviewWindow.h"
 #include "SyncProfile.h"
 #include "SyncOptions.h"
@@ -72,6 +73,7 @@ static void ApplyReadableTheme(HWND hWnd) {
     styleButton(g_hWndSaveProfileBtn);
     styleButton(g_hWndLoadProfileBtn);
     styleButton(g_hWndScheduleBtn);
+    styleButton(g_hWndHistoryBtn);
     styleButton(g_hWndPreviewBtn);
     styleButton(g_hWndAnalyzeBtn);
     styleButton(g_hWndSyncBtn);
@@ -137,10 +139,11 @@ static void LayoutMainWindow(HWND hWnd, int cx, int cy) {
     MoveWindow(g_hWndIncludeEdit, m, y, w, eh, TRUE);
     y += eh + UiTheme::SectionGap;
 
-    const int profileBtnW = (w - 16) / 3;
+    const int profileBtnW = (w - 24) / 4;
     moveBtn(g_hWndSaveProfileBtn, m, y, profileBtnW, bh);
     moveBtn(g_hWndLoadProfileBtn, m + profileBtnW + 8, y, profileBtnW, bh);
     moveBtn(g_hWndScheduleBtn, m + (profileBtnW + 8) * 2, y, profileBtnW, bh);
+    moveBtn(g_hWndHistoryBtn, m + (profileBtnW + 8) * 3, y, profileBtnW, bh);
     y += bh + UiTheme::RowGap;
 
     if (g_hWndAdvancedGroup) {
@@ -334,12 +337,15 @@ static void CreateControls(HWND hWnd, HINSTANCE hInstance) {
                                         m, y, w, eh, hWnd, (HMENU)ID_INCLUDE_FILTER_EDIT, hInstance, NULL);
     y += eh + UiTheme::SectionGap;
 
+    const int profileBtnW = (w - 24) / 4;
     g_hWndSaveProfileBtn = CreateWindowExW(0, L"BUTTON", L"Save Profile...", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                                           m, y, 145, bh, hWnd, (HMENU)ID_SAVE_PROFILE_BUTTON, hInstance, NULL);
+                                           m, y, profileBtnW, bh, hWnd, (HMENU)ID_SAVE_PROFILE_BUTTON, hInstance, NULL);
     g_hWndLoadProfileBtn = CreateWindowExW(0, L"BUTTON", L"Load Profile...", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                                           m + 155, y, 145, bh, hWnd, (HMENU)ID_LOAD_PROFILE_BUTTON, hInstance, NULL);
+                                           m + profileBtnW + 8, y, profileBtnW, bh, hWnd, (HMENU)ID_LOAD_PROFILE_BUTTON, hInstance, NULL);
     g_hWndScheduleBtn = CreateWindowExW(0, L"BUTTON", L"Schedule...", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                                        m + 310, y, 130, bh, hWnd, (HMENU)ID_SCHEDULE_BUTTON, hInstance, NULL);
+                                        m + (profileBtnW + 8) * 2, y, profileBtnW, bh, hWnd, (HMENU)ID_SCHEDULE_BUTTON, hInstance, NULL);
+    g_hWndHistoryBtn = CreateWindowExW(0, L"BUTTON", L"History...", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                                       m + (profileBtnW + 8) * 3, y, profileBtnW, bh, hWnd, (HMENU)ID_HISTORY_BUTTON, hInstance, NULL);
     y += bh + UiTheme::RowGap;
 
     g_hWndAdvancedGroup = CreateWindowExW(0, L"BUTTON", L"Advanced Options",
@@ -437,6 +443,7 @@ static void CreateControls(HWND hWnd, HINSTANCE hInstance) {
     setUIFont(g_hWndSaveProfileBtn);
     setUIFont(g_hWndLoadProfileBtn);
     setUIFont(g_hWndScheduleBtn);
+    setUIFont(g_hWndHistoryBtn);
     setUIFont(g_hWndAdvancedGroup);
     setUIFont(g_hWndSha256Check);
     setUIFont(g_hWndVerifyCheck);
@@ -643,6 +650,15 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                         MessageBoxW(hWnd, (L"Failed to load queue: " + error).c_str(), L"ChronoSync Queue", MB_OK | MB_ICONERROR);
                     }
                 }
+            } else if (wmId == ID_HISTORY_BUTTON) {
+                wchar_t dest[MAX_PATH] = {};
+                GetWindowTextW(g_hWndDestEdit, dest, MAX_PATH);
+                if (dest[0] == L'\0') {
+                    MessageBoxW(hWnd, L"Select a destination folder to view sync history.",
+                                L"ChronoSync History", MB_OK | MB_ICONWARNING);
+                    break;
+                }
+                ShowHistoryWindow(hWnd, dest);
             } else if (wmId == ID_SCHEDULE_BUTTON) {
                 ChronoSync::SyncProfile profile = BuildProfileFromUI();
                 if (profile.source.empty() || profile.destination.empty()) {

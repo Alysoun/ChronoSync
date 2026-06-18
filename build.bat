@@ -44,14 +44,14 @@ exit /b 1
 
 :msvc_build
 echo [Building ChronoSync GUI with MSVC (/MT)]
-cl.exe /EHsc /std:c++20 /MT /O2 /W4 /WX /Isrc /Fe:ChronoSync.exe src\Main.cpp src\GuiCommon.cpp src\GuiDialogs.cpp src\SyncGuiWorker.cpp src\ScheduleDialog.cpp src\AnalysisWindow.cpp src\PreviewWindow.cpp src\MainWindow.cpp src\SyncEngine.cpp src\SyncPlan.cpp src\SyncPlanAnalysis.cpp src\SyncExecutor.cpp src\SyncBackup.cpp src\PathFilter.cpp src\SyncProfile.cpp src\FileHash.cpp src\SyncJob.cpp src\NetworkShare.cpp src\DeltaCopy.cpp src\TaskScheduler.cpp src\CliRunner.cpp dwmapi.lib comctl32.lib ole32.lib shell32.lib bcrypt.lib mpr.lib uxtheme.lib user32.lib gdi32.lib /link /SUBSYSTEM:WINDOWS
+cl.exe /EHsc /std:c++20 /MT /O2 /W4 /WX /Isrc /Fe:ChronoSync.exe src\Main.cpp src\GuiCommon.cpp src\GuiDialogs.cpp src\SyncGuiWorker.cpp src\ScheduleDialog.cpp src\AnalysisWindow.cpp src\PreviewWindow.cpp src\MainWindow.cpp src\HistoryWindow.cpp src\SyncHistory.cpp src\SyncEngine.cpp src\SyncPlan.cpp src\SyncPlanAnalysis.cpp src\SyncExecutor.cpp src\SyncBackup.cpp src\PathFilter.cpp src\SyncProfile.cpp src\FileHash.cpp src\SyncJob.cpp src\NetworkShare.cpp src\DeltaCopy.cpp src\TaskScheduler.cpp src\CliRunner.cpp dwmapi.lib comctl32.lib ole32.lib shell32.lib bcrypt.lib mpr.lib uxtheme.lib user32.lib gdi32.lib /link /SUBSYSTEM:WINDOWS
 if %errorlevel% neq 0 (
     echo [ERROR] GUI compilation failed with MSVC.
     exit /b %errorlevel%
 )
 
 echo [Building ChronoSyncTests with MSVC (/MT)]
-cl.exe /EHsc /std:c++20 /MT /O2 /W4 /WX /Isrc /Fe:ChronoSyncTests.exe tests\TestMain.cpp src\SyncEngine.cpp src\SyncPlan.cpp src\SyncPlanAnalysis.cpp src\SyncExecutor.cpp src\SyncBackup.cpp src\PathFilter.cpp src\FileHash.cpp src\NetworkShare.cpp src\DeltaCopy.cpp bcrypt.lib mpr.lib
+cl.exe /EHsc /std:c++20 /MT /O2 /W4 /WX /Isrc /Fe:ChronoSyncTests.exe tests\TestMain.cpp src\SyncEngine.cpp src\SyncPlan.cpp src\SyncPlanAnalysis.cpp src\SyncHistory.cpp src\SyncExecutor.cpp src\SyncBackup.cpp src\PathFilter.cpp src\FileHash.cpp src\NetworkShare.cpp src\DeltaCopy.cpp bcrypt.lib mpr.lib
 if %errorlevel% neq 0 (
     echo [ERROR] Test compilation failed with MSVC.
     exit /b %errorlevel%
@@ -66,14 +66,14 @@ goto end
 
 :mingw_build
 echo [Building ChronoSync GUI with MinGW (static)]
-g++ -std=c++20 -O3 -Wall -Wextra -Werror -Isrc -static -static-libgcc -static-libstdc++ -mwindows -o ChronoSync.exe src/Main.cpp src/GuiCommon.cpp src/GuiDialogs.cpp src/SyncGuiWorker.cpp src/ScheduleDialog.cpp src/AnalysisWindow.cpp src/PreviewWindow.cpp src/MainWindow.cpp src/SyncEngine.cpp src/SyncPlan.cpp src/SyncPlanAnalysis.cpp src/SyncExecutor.cpp src/SyncBackup.cpp src/PathFilter.cpp src/SyncProfile.cpp src/FileHash.cpp src/SyncJob.cpp src/NetworkShare.cpp src/DeltaCopy.cpp src/TaskScheduler.cpp src/CliRunner.cpp -ldwmapi -lcomctl32 -lole32 -lshell32 -lbcrypt -lmpr -luxtheme -lgdi32
+g++ -std=c++20 -O3 -Wall -Wextra -Werror -Isrc -static -static-libgcc -static-libstdc++ -mwindows -o ChronoSync.exe src/Main.cpp src/GuiCommon.cpp src/GuiDialogs.cpp src/SyncGuiWorker.cpp src/ScheduleDialog.cpp src/AnalysisWindow.cpp src/PreviewWindow.cpp src/MainWindow.cpp src/HistoryWindow.cpp src/SyncHistory.cpp src/SyncEngine.cpp src/SyncPlan.cpp src/SyncPlanAnalysis.cpp src/SyncExecutor.cpp src/SyncBackup.cpp src/PathFilter.cpp src/SyncProfile.cpp src/FileHash.cpp src/SyncJob.cpp src/NetworkShare.cpp src/DeltaCopy.cpp src/TaskScheduler.cpp src/CliRunner.cpp -ldwmapi -lcomctl32 -lole32 -lshell32 -lbcrypt -lmpr -luxtheme -lgdi32
 if %errorlevel% neq 0 (
     echo [ERROR] GUI compilation failed with MinGW.
     exit /b %errorlevel%
 )
 
 echo [Building ChronoSyncTests with MinGW (static)]
-g++ -std=c++20 -O3 -Wall -Wextra -Werror -Isrc -static -static-libgcc -static-libstdc++ -o ChronoSyncTests.exe tests/TestMain.cpp src/SyncEngine.cpp src/SyncPlan.cpp src/SyncPlanAnalysis.cpp src/SyncExecutor.cpp src/SyncBackup.cpp src/PathFilter.cpp src/FileHash.cpp src/NetworkShare.cpp src/DeltaCopy.cpp -lbcrypt -lmpr
+g++ -std=c++20 -O3 -Wall -Wextra -Werror -Isrc -static -static-libgcc -static-libstdc++ -o ChronoSyncTests.exe tests/TestMain.cpp src/SyncEngine.cpp src/SyncPlan.cpp src/SyncPlanAnalysis.cpp src/SyncHistory.cpp src/SyncExecutor.cpp src/SyncBackup.cpp src/PathFilter.cpp src/FileHash.cpp src/NetworkShare.cpp src/DeltaCopy.cpp -lbcrypt -lmpr
 if %errorlevel% neq 0 (
     echo [ERROR] Test compilation failed with MinGW.
     exit /b %errorlevel%

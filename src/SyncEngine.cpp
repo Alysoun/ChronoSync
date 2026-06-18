@@ -4,6 +4,7 @@
 #include "SyncBackup.h"
 #include "NetworkShare.h"
 #include "SyncPlanAnalysis.h"
+#include "SyncHistory.h"
 #include <windows.h>
 #include <chrono>
 
@@ -30,7 +31,7 @@ namespace ChronoSync {
                 continue;
             }
 
-            if (name == L".chrono_trash" || name == L".chrono_backups") {
+            if (name == L".chrono_trash" || name == L".chrono_backups" || name == L".chrono_history") {
                 continue;
             }
             if (name == L".chrono_tmp" || (name.size() >= 11 && name.compare(name.size() - 11, 11, L".chrono_tmp") == 0)) {
@@ -163,6 +164,12 @@ namespace ChronoSync {
 
         auto endTime = std::chrono::high_resolution_clock::now();
         stats.totalTimeMs = std::chrono::duration<double, std::milli>(endTime - startTime).count();
+
+        std::wstring historyError;
+        SyncHistoryIO::RecordRun(source, destination, options, stats, historyError);
+        if (!historyError.empty() && callbacks.onLog) {
+            callbacks.onLog(L"History: " + historyError, false);
+        }
 
         return stats;
     }

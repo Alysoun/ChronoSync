@@ -28,6 +28,7 @@ HWND g_hWndSaveQueueBtn = NULL;
 HWND g_hWndLoadQueueBtn = NULL;
 HWND g_hWndDeltaCopyCheck = NULL;
 HWND g_hWndScheduleBtn = NULL;
+HWND g_hWndHistoryBtn = NULL;
 HWND g_hWndAdvancedGroup = NULL;
 HWND g_hWndRiskLabel = NULL;
 

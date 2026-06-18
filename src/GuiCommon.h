@@ -58,6 +58,7 @@ enum ControlIds {
     ID_QUEUE_LISTBOX,
     ID_DELTA_COPY_CHECKBOX,
     ID_SCHEDULE_BUTTON,
+    ID_HISTORY_BUTTON,
     ID_SCHEDULE_TIME_EDIT = 9001,
     ID_SCHEDULE_TYPE_COMBO,
     ID_SCHEDULE_DAY_COMBO,
@@ -137,6 +138,7 @@ extern HWND g_hWndSaveQueueBtn;
 extern HWND g_hWndLoadQueueBtn;
 extern HWND g_hWndDeltaCopyCheck;
 extern HWND g_hWndScheduleBtn;
+extern HWND g_hWndHistoryBtn;
 extern HWND g_hWndAdvancedGroup;
 extern HWND g_hWndRiskLabel;
 

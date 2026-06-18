@@ -17,7 +17,8 @@ High-performance native Windows folder synchronizer with differential sync, prev
 - **Preview dialog** — virtual ListView with sort, search/filter, CSV export, and right-click **Show in File Explorer**
 - **Include/exclude filters** — glob patterns (default excludes: `*.pkl`, `node_modules`, `*.zip`)
 - **Sync profiles** — save/load source, destination, prune, filters, and compare options (`.chronosync` JSON)
-- **Plan analysis** — **Analyze Plan** summarizes transfer size, largest files, file-type breakdown, duration estimate, and LOW/MEDIUM/HIGH risk before syncing; preview shows risk headline
+- **Plan analysis** — **Analyze Plan** summarizes transfer size, largest files, category and extension breakdown, duration estimate, and LOW/MEDIUM/HIGH risk before syncing; preview shows risk headline
+- **Sync history** — each sync records run metadata and a destination snapshot under `.chrono_history`; **History...** shows recent activity and compares snapshots for `+ / - / ~` counts
 
 ## Build
 
@@ -95,9 +96,9 @@ ChronoSync already covers the usual sync-tool checklist (preview, filters, profi
 | High | **Analyze Plan / "Explain this sync"** | Done — impact summary, risk scoring, file-type breakdown, largest files, duration estimate |
 | High | **Sync impact summary** | Done — integrated into Analyze Plan and preview risk headline |
 | High | **Risk scoring** | Done — LOW/MEDIUM/HIGH with human-readable reasons |
-| Medium | **File-type analytics** | Breakdown by extension/category before sync (images, source, archives, checkpoints, …) |
-| Medium | **Historical change tracking** | Per-sync metadata log (files copied/updated/deleted, bytes moved) with "what changed last week?" queries |
-| Medium | **Snapshot diff viewer** | Compare two points in time (e.g. June 1 vs June 17) for `+ / - / ~` file counts without running a sync |
+| Medium | **File-type analytics** | Done — category and top-extension breakdown in Analyze Plan |
+| Medium | **Historical change tracking** | Done — per-sync metadata log in `.chrono_history` with last-7-days summary |
+| Medium | **Snapshot diff viewer** | Done — compare two history snapshots for `+ / - / ~` counts in History dialog |
 
 ### Deep Windows integration (performance & reliability)
 

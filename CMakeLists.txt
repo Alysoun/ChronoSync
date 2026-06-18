@@ -26,6 +26,10 @@ add_executable(ChronoSync WIN32
     src/PreviewWindow.h
     src/MainWindow.cpp
     src/MainWindow.h
+    src/HistoryWindow.cpp
+    src/HistoryWindow.h
+    src/SyncHistory.cpp
+    src/SyncHistory.h
     src/SyncEngine.cpp
     src/SyncEngine.h
     src/SyncPlan.cpp
@@ -64,6 +68,8 @@ add_executable(ChronoSyncTests
     src/SyncPlan.h
     src/SyncPlanAnalysis.cpp
     src/SyncPlanAnalysis.h
+    src/SyncHistory.cpp
+    src/SyncHistory.h
     src/SyncExecutor.cpp
     src/SyncExecutor.h
     src/SyncBackup.cpp

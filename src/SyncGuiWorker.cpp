@@ -15,6 +15,7 @@ void SetControlsState(BOOL enabled) {
     EnableWindow(g_hWndVersionedBackupCheck, enabled);
     EnableWindow(g_hWndDeltaCopyCheck, enabled);
     EnableWindow(g_hWndScheduleBtn, enabled);
+    EnableWindow(g_hWndHistoryBtn, enabled);
     EnableWindow(g_hWndAddQueueBtn, enabled);
     EnableWindow(g_hWndRunQueueBtn, enabled);
     EnableWindow(g_hWndClearQueueBtn, enabled);

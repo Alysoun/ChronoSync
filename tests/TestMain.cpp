@@ -11,6 +11,7 @@
 #include "NetworkShare.h"
 #include "DeltaCopy.h"
 #include "SyncPlanAnalysis.h"
+#include "SyncHistory.h"
 
 namespace fs = std::filesystem;
 
@@ -363,7 +364,7 @@ int main() {
     assert(foundReplace && "preview must show Remove (Replace) for type collisions when prune is off");
     assert(!foundPrune && "preview must not show prune deletes when prune is disabled");
 
-    std::wcout << L"[16/17] Verifying plan analysis and risk scoring..." << std::endl;
+    std::wcout << L"[16/19] Verifying plan analysis and risk scoring..." << std::endl;
     auto analysisReport = ChronoSync::BuildSyncPlanReport(
         replaceSrc.wstring(), replaceDest.wstring(), noPrune, callbacks);
     assert(analysisReport.analysis.deletesReplace >= 1 && "analysis should count replacement deletions");
@@ -374,7 +375,41 @@ int main() {
     assert(reportText.find(L"Risk:") != std::wstring::npos);
     assert(reportText.find(L"Largest files:") != std::wstring::npos || analysisReport.analysis.largestFiles.empty());
 
-    std::wcout << L"[17/17] Cleaning up test sandbox..." << std::endl;
+    assert(reportText.find(L"Top extensions") != std::wstring::npos ||
+           analysisReport.analysis.extensionBreakdown.empty());
+
+    std::wcout << L"[17/19] Verifying sync history and snapshots..." << std::endl;
+    ChronoSync::SyncStats historyStats = {};
+    historyStats.filesCopied = 3;
+    historyStats.totalBytesCopied = 4096;
+    std::wstring historyError;
+    assert(ChronoSync::SyncHistoryIO::RecordRun(
+        srcDir.wstring(), destDir.wstring(), noFilters, historyStats, historyError));
+    historyStats.filesCopied = 1;
+    historyStats.itemsDeleted = 1;
+    assert(ChronoSync::SyncHistoryIO::RecordRun(
+        srcDir.wstring(), destDir.wstring(), noFilters, historyStats, historyError));
+
+    std::vector<ChronoSync::SyncHistoryEntry> historyEntries;
+    assert(ChronoSync::SyncHistoryIO::LoadEntries(destDir.wstring(), historyEntries, historyError));
+    assert(historyEntries.size() >= 2);
+
+    ChronoSync::DestinationSnapshot snapA;
+    ChronoSync::DestinationSnapshot snapB;
+    assert(ChronoSync::SyncHistoryIO::LoadSnapshot(
+        destDir.wstring(), historyEntries[0].snapshotId, snapA, historyError));
+    assert(ChronoSync::SyncHistoryIO::LoadSnapshot(
+        destDir.wstring(), historyEntries[1].snapshotId, snapB, historyError));
+    auto diff = ChronoSync::SyncHistoryIO::DiffSnapshots(snapA, snapB);
+    std::wstring diffReport = ChronoSync::SyncHistoryIO::FormatSnapshotDiffReport(
+        diff, historyEntries[0].timestampUtc, historyEntries[1].timestampUtc);
+    assert(diffReport.find(L"Added:") != std::wstring::npos);
+
+    std::wcout << L"[18/19] Verifying history query window..." << std::endl;
+    auto recent = ChronoSync::SyncHistoryIO::QuerySinceDays(destDir.wstring(), 7);
+    assert(recent.size() >= 2);
+
+    std::wcout << L"[19/19] Cleaning up test sandbox..." << std::endl;
     fs::remove_all(sandbox, ec);
 
     std::wcout << L"\n==============================================" << std::endl;

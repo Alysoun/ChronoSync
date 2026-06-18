@@ -101,6 +101,17 @@ namespace ChronoSync {
                 bucketIt->fileCount++;
                 bucketIt->totalBytes += fileItem.fileSize;
             }
+
+            std::wstring ext = GetExtension(fileItem.relativePath);
+            std::wstring extLabel = ext.empty() ? L"(no extension)" : (L"." + ext);
+            auto extIt = std::find_if(analysis.extensionBreakdown.begin(), analysis.extensionBreakdown.end(),
+                [&](const FileTypeBucket& bucket) { return bucket.label == extLabel; });
+            if (extIt == analysis.extensionBreakdown.end()) {
+                analysis.extensionBreakdown.push_back({ extLabel, 1, fileItem.fileSize });
+            } else {
+                extIt->fileCount++;
+                extIt->totalBytes += fileItem.fileSize;
+            }
         }
 
         std::sort(analysis.largestFiles.begin(), analysis.largestFiles.end(),
@@ -111,6 +122,12 @@ namespace ChronoSync {
 
         std::sort(analysis.fileTypeBreakdown.begin(), analysis.fileTypeBreakdown.end(),
             [](const FileTypeBucket& a, const FileTypeBucket& b) { return a.totalBytes > b.totalBytes; });
+
+        std::sort(analysis.extensionBreakdown.begin(), analysis.extensionBreakdown.end(),
+            [](const FileTypeBucket& a, const FileTypeBucket& b) { return a.totalBytes > b.totalBytes; });
+        if (analysis.extensionBreakdown.size() > 12) {
+            analysis.extensionBreakdown.resize(12);
+        }
 
         for (const auto& plannedDelete : plan.itemsToDelete) {
             if (plannedDelete.reason == DeleteReason::Replace) {
@@ -225,7 +242,7 @@ namespace ChronoSync {
         }
 
         if (!analysis.fileTypeBreakdown.empty()) {
-            out << L"File types by transfer size:\r\n";
+            out << L"Categories by transfer size:\r\n";
             unsigned long long categorizedBytes = 0;
             for (const auto& bucket : analysis.fileTypeBreakdown) {
                 categorizedBytes += bucket.totalBytes;
@@ -236,6 +253,15 @@ namespace ChronoSync {
                     : 0;
                 out << L"  " << pct << L"% " << bucket.label
                     << L" (" << bucket.fileCount << L" file(s), " << FormatBytes(bucket.totalBytes) << L")\r\n";
+            }
+            out << L"\r\n";
+        }
+
+        if (!analysis.extensionBreakdown.empty()) {
+            out << L"Top extensions by transfer size:\r\n";
+            for (const auto& bucket : analysis.extensionBreakdown) {
+                out << L"  " << bucket.label
+                    << L" — " << bucket.fileCount << L" file(s), " << FormatBytes(bucket.totalBytes) << L"\r\n";
             }
         }
 

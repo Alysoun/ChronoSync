@@ -41,6 +41,7 @@ namespace ChronoSync {
         std::vector<std::wstring> riskReasons;
         std::vector<LargestFileEntry> largestFiles;
         std::vector<FileTypeBucket> fileTypeBreakdown;
+        std::vector<FileTypeBucket> extensionBreakdown;
     };
 
     std::wstring RiskLevelToString(RiskLevel level);
