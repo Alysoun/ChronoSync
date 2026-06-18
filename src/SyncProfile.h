@@ -1,6 +1,6 @@
 #pragma once
 
-#include "PathFilter.h"
+#include "SyncOptions.h"
 #include <string>
 
 namespace ChronoSync {
@@ -9,8 +9,7 @@ namespace ChronoSync {
         std::wstring name;
         std::wstring source;
         std::wstring destination;
-        bool prune = false;
-        FilterOptions filters = FilterOptions::Defaults();
+        SyncOptions options;
     };
 
     class SyncProfileIO {

@@ -1,10 +1,13 @@
 #include "SyncEngine.h"
+#include "FileHash.h"
 #include <windows.h>
 #include <iostream>
 #include <fstream>
 #include <unordered_set>
+#include <unordered_map>
 #include <algorithm>
 #include <chrono>
+#include <array>
 
 #ifndef IO_REPARSE_TAG_MOUNT_POINT
 #define IO_REPARSE_TAG_MOUNT_POINT 0xA0000003L
@@ -14,6 +17,83 @@
 #endif
 
 namespace ChronoSync {
+
+    static bool FileContentsDiffer(const std::filesystem::path& srcPath,
+                                   const std::filesystem::path& destPath,
+                                   const SyncItem& srcItem,
+                                   const SyncItem& destItem,
+                                   CompareMode mode) {
+        if (srcItem.fileSize != destItem.fileSize) {
+            return true;
+        }
+
+        if (mode == CompareMode::Timestamp) {
+            LONG cmp = CompareFileTime(&srcItem.lastWriteTime, &destItem.lastWriteTime);
+            return cmp > 0;
+        }
+
+        std::array<uint8_t, 32> srcHash{};
+        std::array<uint8_t, 32> destHash{};
+        if (!FileHash::Sha256File(srcPath.wstring(), srcHash) ||
+            !FileHash::Sha256File(destPath.wstring(), destHash)) {
+            return true;
+        }
+        return !FileHash::HashesEqual(srcHash, destHash);
+    }
+
+    static std::wstring MakeBackupTimestamp() {
+        SYSTEMTIME st;
+        GetLocalTime(&st);
+        wchar_t buf[32];
+        swprintf_s(buf, L"%04d-%02d-%02d_%02d%02d%02d",
+                   st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+        return buf;
+    }
+
+    static void PruneOldBackupVersions(const std::filesystem::path& backupRoot, size_t maxVersions, std::error_code& ec) {
+        if (!std::filesystem::exists(backupRoot, ec)) {
+            return;
+        }
+
+        std::vector<std::filesystem::path> versions;
+        for (const auto& entry : std::filesystem::directory_iterator(backupRoot, ec)) {
+            if (entry.is_directory()) {
+                versions.push_back(entry.path());
+            }
+        }
+
+        std::sort(versions.begin(), versions.end(), std::greater<std::filesystem::path>());
+        for (size_t i = maxVersions; i < versions.size(); ++i) {
+            std::filesystem::remove_all(versions[i], ec);
+        }
+    }
+
+    static std::filesystem::path GetLatestBackupFolder(const std::filesystem::path& backupRoot) {
+        std::error_code ec;
+        std::filesystem::path latest;
+        if (!std::filesystem::exists(backupRoot, ec)) {
+            return latest;
+        }
+
+        for (const auto& entry : std::filesystem::directory_iterator(backupRoot, ec)) {
+            if (entry.is_directory()) {
+                if (latest.empty() || entry.path().filename().wstring() > latest.filename().wstring()) {
+                    latest = entry.path();
+                }
+            }
+        }
+        return latest;
+    }
+
+    static bool VerifyCopiedFile(const std::filesystem::path& srcPath, const std::filesystem::path& destPath) {
+        std::array<uint8_t, 32> srcHash{};
+        std::array<uint8_t, 32> destHash{};
+        if (!FileHash::Sha256File(srcPath.wstring(), srcHash) ||
+            !FileHash::Sha256File(destPath.wstring(), destHash)) {
+            return false;
+        }
+        return FileHash::HashesEqual(srcHash, destHash);
+    }
 
     // Helper recursive directory scanner using FindFirstFileW/FindNextFileW
     static void ScanDirectoryHelper(const std::wstring& rootDir, const std::wstring& subDir,
@@ -33,8 +113,8 @@ namespace ChronoSync {
                 continue;
             }
 
-            // Safety guard: skip internal trash and temp items at all levels
-            if (name == L".chrono_trash") {
+            // Safety guard: skip internal trash, backups, and temp items at all levels
+            if (name == L".chrono_trash" || name == L".chrono_backups") {
                 continue;
             }
             if (name == L".chrono_tmp" || (name.size() >= 11 && name.compare(name.size() - 11, 11, L".chrono_tmp") == 0)) {
@@ -146,12 +226,14 @@ namespace ChronoSync {
         return PROGRESS_CONTINUE;
     }
 
-    SyncStats SyncEngine::Sync(const std::wstring& source, const std::wstring& destination, bool prune, const FilterOptions& filters, const SyncCallbacks& callbacks) {
+    SyncStats SyncEngine::Sync(const std::wstring& source, const std::wstring& destination, const SyncOptions& options, const SyncCallbacks& callbacks) {
         auto startTime = std::chrono::high_resolution_clock::now();
         SyncStats stats;
 
         std::filesystem::path srcRoot(source);
         std::filesystem::path destRoot(destination);
+        const bool prune = options.prune;
+        const FilterOptions& filters = options.filters;
 
         // 1. Validate source directory
         if (!std::filesystem::exists(srcRoot)) {
@@ -230,14 +312,9 @@ namespace ChronoSync {
                         itemsToDelete.push_back(destItem);
                         needsCopy = true;
                     } else {
-                        if (srcItem.fileSize != destItem.fileSize) {
-                            needsCopy = true;
-                        } else {
-                            LONG cmp = CompareFileTime(&srcItem.lastWriteTime, &destItem.lastWriteTime);
-                            if (cmp > 0) {
-                                needsCopy = true;
-                            }
-                        }
+                        std::filesystem::path srcPath = srcRoot / srcItem.relativePath;
+                        std::filesystem::path destPath = destRoot / srcItem.relativePath;
+                        needsCopy = FileContentsDiffer(srcPath, destPath, srcItem, destItem, options.compareMode);
                     }
                 }
 
@@ -274,11 +351,10 @@ namespace ChronoSync {
         auto copyStart = std::chrono::high_resolution_clock::now();
 
         // 5.1 Prune/Clean Destination Files/Folders/Links
-        std::filesystem::path trashRoot = destRoot / L".chrono_trash";
+        std::filesystem::path backupRoot = destRoot / L".chrono_backups";
+        std::filesystem::path trashRoot;
         std::error_code ec;
-        if (prune) {
-            std::filesystem::remove_all(trashRoot, ec); // Clear previous backup
-        }
+        bool backupFolderCreated = false;
 
         for (const auto& item : itemsToDelete) {
             std::filesystem::path fullDestPath = destRoot / item.relativePath;
@@ -305,15 +381,24 @@ namespace ChronoSync {
                     }
                 }
             } else {
-                // Move to .chrono_trash if prune is true. Otherwise, delete permanently (collision).
                 if (prune) {
+                    if (!backupFolderCreated) {
+                        if (options.versionedBackups) {
+                            trashRoot = backupRoot / MakeBackupTimestamp();
+                        } else {
+                            trashRoot = destRoot / L".chrono_trash";
+                            std::filesystem::remove_all(trashRoot, ec);
+                        }
+                        std::filesystem::create_directories(trashRoot, ec);
+                        backupFolderCreated = true;
+                    }
+
                     std::filesystem::path trashPath = trashRoot / item.relativePath;
                     std::filesystem::create_directories(trashPath.parent_path(), ec);
                     std::filesystem::rename(fullDestPath, trashPath, ec);
                     if (!ec) {
                         stats.itemsDeleted++;
                     } else {
-                        // Fallback to permanent delete if rename fails
                         bool success = std::filesystem::remove_all(fullDestPath, ec);
                         if (success && !ec) {
                             stats.itemsDeleted++;
@@ -337,6 +422,10 @@ namespace ChronoSync {
                     }
                 }
             }
+        }
+
+        if (prune && options.versionedBackups && backupFolderCreated) {
+            PruneOldBackupVersions(backupRoot, options.maxBackupVersions, ec);
         }
 
         // 5.2 Create Directories
@@ -398,11 +487,32 @@ namespace ChronoSync {
                         CloseHandle(hFile);
                     }
 
-                    stats.filesCopied++;
-                    stats.totalBytesCopied += fileItem.fileSize;
+                    bool copyOk = true;
+                    std::wstring verifyError;
+                    if (options.verifyAfterCopy || options.compareMode == CompareMode::Sha256) {
+                        stats.filesVerified++;
+                        if (!VerifyCopiedFile(srcPath, destPath)) {
+                            copyOk = false;
+                            verifyError = L"SHA256 verification failed after copy";
+                            stats.verifyFailures++;
+                        }
+                    }
 
-                    if (callbacks.onCopyComplete) {
-                        callbacks.onCopyComplete(fileItem.relativePath, true, L"");
+                    if (copyOk) {
+                        stats.filesCopied++;
+                        stats.totalBytesCopied += fileItem.fileSize;
+
+                        if (callbacks.onCopyComplete) {
+                            callbacks.onCopyComplete(fileItem.relativePath, true, L"");
+                        }
+                    } else {
+                        std::filesystem::remove(destPath, ec);
+                        if (callbacks.onCopyComplete) {
+                            callbacks.onCopyComplete(fileItem.relativePath, false, verifyError);
+                        }
+                        if (callbacks.onLog) {
+                            callbacks.onLog(L"Verification failed: " + fileItem.relativePath, true);
+                        }
                     }
                 } else {
                     DWORD err = GetLastError();
@@ -537,8 +647,10 @@ namespace ChronoSync {
         return std::wstring(buf);
     }
 
-    std::vector<PreviewItem> SyncEngine::Preview(const std::wstring& source, const std::wstring& destination, bool prune, const FilterOptions& filters, const SyncCallbacks& callbacks) {
+    std::vector<PreviewItem> SyncEngine::Preview(const std::wstring& source, const std::wstring& destination, const SyncOptions& options, const SyncCallbacks& callbacks) {
         std::vector<PreviewItem> previewList;
+        const bool prune = options.prune;
+        const FilterOptions& filters = options.filters;
 
         std::filesystem::path srcRoot(source);
         std::filesystem::path destRoot(destination);
@@ -631,15 +743,11 @@ namespace ChronoSync {
                     if (destItem.isReparsePoint) {
                         needsCopy = true;
                     } else {
-                        if (srcItem.fileSize != destItem.fileSize) {
+                        std::filesystem::path srcPath = srcRoot / srcItem.relativePath;
+                        std::filesystem::path destPath = destRoot / srcItem.relativePath;
+                        if (FileContentsDiffer(srcPath, destPath, srcItem, destItem, options.compareMode)) {
                             needsCopy = true;
                             actionType = L"Copy (Update)";
-                        } else {
-                            LONG cmp = CompareFileTime(&srcItem.lastWriteTime, &destItem.lastWriteTime);
-                            if (cmp > 0) {
-                                needsCopy = true;
-                                actionType = L"Copy (Update)";
-                            }
                         }
                     }
                 }
@@ -692,18 +800,44 @@ namespace ChronoSync {
         return previewList;
     }
 
+    bool SyncEngine::HasRestorableBackups(const std::wstring& destination) {
+        std::filesystem::path destRoot(destination);
+        std::error_code ec;
+        if (std::filesystem::exists(destRoot / L".chrono_trash", ec)) {
+            return true;
+        }
+
+        std::filesystem::path backupRoot = destRoot / L".chrono_backups";
+        if (!std::filesystem::exists(backupRoot, ec)) {
+            return false;
+        }
+
+        for (const auto& entry : std::filesystem::directory_iterator(backupRoot, ec)) {
+            if (entry.is_directory()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     bool SyncEngine::UndoPruning(const std::wstring& destination, const SyncCallbacks& callbacks) {
         std::filesystem::path destRoot(destination);
-        std::filesystem::path trashRoot = destRoot / L".chrono_trash";
+        std::filesystem::path backupRoot = destRoot / L".chrono_backups";
+        std::filesystem::path trashRoot = GetLatestBackupFolder(backupRoot);
+
+        if (trashRoot.empty()) {
+            trashRoot = destRoot / L".chrono_trash";
+        }
+
         if (!std::filesystem::exists(trashRoot)) {
             if (callbacks.onLog) {
-                callbacks.onLog(L"No backup trash folder found to restore.", false);
+                callbacks.onLog(L"No backup folder found to restore.", false);
             }
             return false;
         }
 
         if (callbacks.onLog) {
-            callbacks.onLog(L"Undoing pruning. Restoring files from .chrono_trash...", false);
+            callbacks.onLog(L"Undoing pruning. Restoring files from " + trashRoot.filename().wstring() + L"...", false);
         }
 
         // Scan trash folder recursively to find files/dirs to restore
@@ -737,8 +871,11 @@ namespace ChronoSync {
             }
         }
 
-        // Clean up trash directory
+        // Clean up restored backup directory
         std::filesystem::remove_all(trashRoot, ec);
+        if (trashRoot.parent_path().filename() == L".chrono_backups") {
+            // Leave .chrono_backups root in place for history metadata
+        }
 
         if (callbacks.onLog) {
             callbacks.onLog(L"Restoration complete. " + std::to_wstring(restoredCount) + L" items restored successfully.", false);

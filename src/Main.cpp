@@ -14,6 +14,8 @@
 #include <algorithm>
 #include "SyncEngine.h"
 #include "SyncProfile.h"
+#include "SyncOptions.h"
+#include "SyncJob.h"
 
 // Embed modern visual styles manifest when compiling with MSVC
 #ifdef _MSC_VER
@@ -44,7 +46,16 @@ enum ControlIds {
     ID_SAVE_PROFILE_BUTTON,
     ID_LOAD_PROFILE_BUTTON,
     ID_PREVIEW_FILTER_EDIT = 203,
-    ID_PREVIEW_LOCATE_EXPLORER
+    ID_PREVIEW_LOCATE_EXPLORER,
+    ID_SHA256_CHECKBOX,
+    ID_VERIFY_COPY_CHECKBOX,
+    ID_VERSIONED_BACKUP_CHECKBOX,
+    ID_ADD_QUEUE_BUTTON,
+    ID_RUN_QUEUE_BUTTON,
+    ID_CLEAR_QUEUE_BUTTON,
+    ID_SAVE_QUEUE_BUTTON,
+    ID_LOAD_QUEUE_BUTTON,
+    ID_QUEUE_LISTBOX
 };
 
 // Define thread communications message IDs
@@ -52,6 +63,7 @@ enum ControlIds {
 #define WM_SYNC_COMPLETE            (WM_USER + 11)
 #define WM_SYNC_PREVIEW_COMPLETE    (WM_USER + 12)
 #define WM_SYNC_UNDO_COMPLETE       (WM_USER + 13)
+#define WM_SYNC_QUEUE_COMPLETE      (WM_USER + 14)
 
 // Control handles
 HWND g_hWndMain = NULL;
@@ -70,6 +82,17 @@ HWND g_hWndExcludeEdit = NULL;
 HWND g_hWndIncludeEdit = NULL;
 HWND g_hWndSaveProfileBtn = NULL;
 HWND g_hWndLoadProfileBtn = NULL;
+HWND g_hWndSha256Check = NULL;
+HWND g_hWndVerifyCheck = NULL;
+HWND g_hWndVersionedBackupCheck = NULL;
+HWND g_hWndQueueList = NULL;
+HWND g_hWndAddQueueBtn = NULL;
+HWND g_hWndRunQueueBtn = NULL;
+HWND g_hWndClearQueueBtn = NULL;
+HWND g_hWndSaveQueueBtn = NULL;
+HWND g_hWndLoadQueueBtn = NULL;
+
+std::vector<ChronoSync::SyncJob> g_SyncJobQueue;
 
 // Brushes for custom dark styling (VS Dark theme)
 HBRUSH g_hbrBackground = NULL;
@@ -169,15 +192,46 @@ ChronoSync::FilterOptions GetFiltersFromUI() {
     return ChronoSync::FilterOptions::FromSemicolonList(includeBuf, excludeBuf);
 }
 
+ChronoSync::SyncOptions GetSyncOptionsFromUI() {
+    ChronoSync::SyncOptions opts;
+    opts.prune = (SendMessageW(g_hWndPruneCheck, BM_GETCHECK, 0, 0) == BST_CHECKED);
+    opts.filters = GetFiltersFromUI();
+    opts.compareMode = (SendMessageW(g_hWndSha256Check, BM_GETCHECK, 0, 0) == BST_CHECKED)
+        ? ChronoSync::CompareMode::Sha256
+        : ChronoSync::CompareMode::Timestamp;
+    opts.verifyAfterCopy = (SendMessageW(g_hWndVerifyCheck, BM_GETCHECK, 0, 0) == BST_CHECKED);
+    opts.versionedBackups = (SendMessageW(g_hWndVersionedBackupCheck, BM_GETCHECK, 0, 0) == BST_CHECKED);
+    opts.maxBackupVersions = 5;
+    return opts;
+}
+
+void UpdateUndoButtonState(const std::wstring& destPath) {
+    EnableWindow(g_hWndUndoBtn, ChronoSync::SyncEngine::HasRestorableBackups(destPath) ? TRUE : FALSE);
+}
+
+void RefreshQueueListbox() {
+    if (!g_hWndQueueList) {
+        return;
+    }
+    SendMessageW(g_hWndQueueList, LB_RESETCONTENT, 0, 0);
+    for (size_t i = 0; i < g_SyncJobQueue.size(); ++i) {
+        const auto& job = g_SyncJobQueue[i];
+        std::wstring line = std::to_wstring(i + 1) + L". " + job.name + L"  (" + job.source + L" -> " + job.destination + L")";
+        SendMessageW(g_hWndQueueList, LB_ADDSTRING, 0, (LPARAM)line.c_str());
+    }
+}
+
 void ApplyProfileToUI(const ChronoSync::SyncProfile& profile) {
     SetWindowTextW(g_hWndSrcEdit, profile.source.c_str());
     SetWindowTextW(g_hWndDestEdit, profile.destination.c_str());
-    SendMessageW(g_hWndPruneCheck, BM_SETCHECK, profile.prune ? BST_CHECKED : BST_UNCHECKED, 0);
-    SetWindowTextW(g_hWndIncludeEdit, profile.filters.IncludeToSemicolonList().c_str());
-    SetWindowTextW(g_hWndExcludeEdit, profile.filters.ExcludeToSemicolonList().c_str());
-
-    std::wstring trashPath = profile.destination + L"\\.chrono_trash";
-    EnableWindow(g_hWndUndoBtn, std::filesystem::exists(trashPath) ? TRUE : FALSE);
+    SendMessageW(g_hWndPruneCheck, BM_SETCHECK, profile.options.prune ? BST_CHECKED : BST_UNCHECKED, 0);
+    SetWindowTextW(g_hWndIncludeEdit, profile.options.filters.IncludeToSemicolonList().c_str());
+    SetWindowTextW(g_hWndExcludeEdit, profile.options.filters.ExcludeToSemicolonList().c_str());
+    SendMessageW(g_hWndSha256Check, BM_SETCHECK,
+                 profile.options.compareMode == ChronoSync::CompareMode::Sha256 ? BST_CHECKED : BST_UNCHECKED, 0);
+    SendMessageW(g_hWndVerifyCheck, BM_SETCHECK, profile.options.verifyAfterCopy ? BST_CHECKED : BST_UNCHECKED, 0);
+    SendMessageW(g_hWndVersionedBackupCheck, BM_SETCHECK, profile.options.versionedBackups ? BST_CHECKED : BST_UNCHECKED, 0);
+    UpdateUndoButtonState(profile.destination);
 }
 
 ChronoSync::SyncProfile BuildProfileFromUI() {
@@ -190,9 +244,22 @@ ChronoSync::SyncProfile BuildProfileFromUI() {
     profile.name = L"ChronoSync Profile";
     profile.source = src;
     profile.destination = dest;
-    profile.prune = (SendMessageW(g_hWndPruneCheck, BM_GETCHECK, 0, 0) == BST_CHECKED);
-    profile.filters = GetFiltersFromUI();
+    profile.options = GetSyncOptionsFromUI();
     return profile;
+}
+
+ChronoSync::SyncJob BuildJobFromUI() {
+    wchar_t src[MAX_PATH] = {};
+    wchar_t dest[MAX_PATH] = {};
+    GetWindowTextW(g_hWndSrcEdit, src, MAX_PATH);
+    GetWindowTextW(g_hWndDestEdit, dest, MAX_PATH);
+
+    ChronoSync::SyncJob job;
+    job.name = L"Sync Job " + std::to_wstring(g_SyncJobQueue.size() + 1);
+    job.source = src;
+    job.destination = dest;
+    job.options = GetSyncOptionsFromUI();
+    return job;
 }
 
 static bool ContainsInsensitive(const std::wstring& haystack, const std::wstring& needle) {
@@ -424,6 +491,71 @@ std::wstring SaveProfileDialog(HWND hWndParent) {
     return resultPath;
 }
 
+std::wstring OpenQueueDialog(HWND hWndParent) {
+    std::wstring resultPath;
+    IFileOpenDialog* pFileOpen = nullptr;
+    HRESULT hr = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_ALL,
+                                  IID_IFileOpenDialog, reinterpret_cast<void**>(&pFileOpen));
+    if (SUCCEEDED(hr)) {
+        COMDLG_FILTERSPEC fileTypes[] = {
+            { L"ChronoSync Queues (*.chronoqueue)", L"*.chronoqueue" },
+            { L"JSON Files (*.json)", L"*.json" },
+            { L"All Files (*.*)", L"*.*" }
+        };
+        pFileOpen->SetFileTypes(3, fileTypes);
+        pFileOpen->SetDefaultExtension(L"chronoqueue");
+        pFileOpen->SetTitle(L"Load Sync Queue");
+        hr = pFileOpen->Show(hWndParent);
+        if (SUCCEEDED(hr)) {
+            IShellItem* pItem = nullptr;
+            hr = pFileOpen->GetResult(&pItem);
+            if (SUCCEEDED(hr)) {
+                wchar_t* pszFilePath = nullptr;
+                hr = pItem->GetDisplayName(SIGDN_FILESYSPATH, &pszFilePath);
+                if (SUCCEEDED(hr)) {
+                    resultPath = pszFilePath;
+                    CoTaskMemFree(pszFilePath);
+                }
+                pItem->Release();
+            }
+        }
+        pFileOpen->Release();
+    }
+    return resultPath;
+}
+
+std::wstring SaveQueueDialog(HWND hWndParent) {
+    std::wstring resultPath;
+    IFileSaveDialog* pFileSave = nullptr;
+    HRESULT hr = CoCreateInstance(CLSID_FileSaveDialog, nullptr, CLSCTX_ALL,
+                                  IID_IFileSaveDialog, reinterpret_cast<void**>(&pFileSave));
+    if (SUCCEEDED(hr)) {
+        COMDLG_FILTERSPEC fileTypes[] = {
+            { L"ChronoSync Queues (*.chronoqueue)", L"*.chronoqueue" },
+            { L"JSON Files (*.json)", L"*.json" }
+        };
+        pFileSave->SetFileTypes(2, fileTypes);
+        pFileSave->SetDefaultExtension(L"chronoqueue");
+        pFileSave->SetTitle(L"Save Sync Queue");
+        hr = pFileSave->Show(hWndParent);
+        if (SUCCEEDED(hr)) {
+            IShellItem* pItem = nullptr;
+            hr = pFileSave->GetResult(&pItem);
+            if (SUCCEEDED(hr)) {
+                wchar_t* pszFilePath = nullptr;
+                hr = pItem->GetDisplayName(SIGDN_FILESYSPATH, &pszFilePath);
+                if (SUCCEEDED(hr)) {
+                    resultPath = pszFilePath;
+                    CoTaskMemFree(pszFilePath);
+                }
+                pItem->Release();
+            }
+        }
+        pFileSave->Release();
+    }
+    return resultPath;
+}
+
 // Modern COM file browser dialog helper
 std::wstring BrowseForFolder(HWND hWndParent, const wchar_t* title) {
     std::wstring resultPath = L"";
@@ -468,6 +600,14 @@ void SetControlsState(BOOL enabled) {
     EnableWindow(g_hWndIncludeEdit, enabled);
     EnableWindow(g_hWndSaveProfileBtn, enabled);
     EnableWindow(g_hWndLoadProfileBtn, enabled);
+    EnableWindow(g_hWndSha256Check, enabled);
+    EnableWindow(g_hWndVerifyCheck, enabled);
+    EnableWindow(g_hWndVersionedBackupCheck, enabled);
+    EnableWindow(g_hWndAddQueueBtn, enabled);
+    EnableWindow(g_hWndRunQueueBtn, enabled);
+    EnableWindow(g_hWndClearQueueBtn, enabled);
+    EnableWindow(g_hWndSaveQueueBtn, enabled);
+    EnableWindow(g_hWndLoadQueueBtn, enabled);
     EnableWindow(g_hWndPreviewBtn, enabled);
     EnableWindow(g_hWndSyncBtn, enabled);
     if (!enabled) {
@@ -476,7 +616,7 @@ void SetControlsState(BOOL enabled) {
 }
 
 // Background thread preview runner
-void PreviewThreadProc(std::wstring src, std::wstring dest, bool prune, ChronoSync::FilterOptions filters) {
+void PreviewThreadProc(std::wstring src, std::wstring dest, ChronoSync::SyncOptions options) {
     ChronoSync::SyncCallbacks callbacks;
     
     callbacks.onScanStart = [](const std::wstring& rootDir) {
@@ -502,14 +642,14 @@ void PreviewThreadProc(std::wstring src, std::wstring dest, bool prune, ChronoSy
         PostMessageW(g_hWndMain, WM_SYNC_EVENT, 0, 0);
     };
 
-    auto list = ChronoSync::SyncEngine::Preview(src, dest, prune, filters, callbacks);
+    auto list = ChronoSync::SyncEngine::Preview(src, dest, options, callbacks);
     
     std::vector<ChronoSync::PreviewItem>* pList = new std::vector<ChronoSync::PreviewItem>(std::move(list));
     PostMessageW(g_hWndMain, WM_SYNC_PREVIEW_COMPLETE, 0, (LPARAM)pList);
 }
 
 // Background thread sync runner
-void SyncThreadProc(std::wstring src, std::wstring dest, bool prune, ChronoSync::FilterOptions filters) {
+void SyncThreadProc(std::wstring src, std::wstring dest, ChronoSync::SyncOptions options) {
     ChronoSync::SyncCallbacks callbacks;
     
     callbacks.onScanStart = [](const std::wstring& rootDir) {
@@ -580,9 +720,80 @@ void SyncThreadProc(std::wstring src, std::wstring dest, bool prune, ChronoSync:
 
     // Run synchronization
     ChronoSync::SyncStats* pStats = new ChronoSync::SyncStats();
-    *pStats = ChronoSync::SyncEngine::Sync(src, dest, prune, filters, callbacks);
+    *pStats = ChronoSync::SyncEngine::Sync(src, dest, options, callbacks);
 
     PostMessageW(g_hWndMain, WM_SYNC_COMPLETE, 1, (LPARAM)pStats);
+}
+
+void QueueThreadProc(std::vector<ChronoSync::SyncJob> jobs) {
+    ChronoSync::SyncCallbacks callbacks;
+    callbacks.onScanStart = [](const std::wstring& rootDir) {
+        g_MsgRegistry.SetStatus(L"Scanning: " + rootDir);
+        PostMessageW(g_hWndMain, WM_SYNC_EVENT, 0, 0);
+    };
+    callbacks.onScanComplete = [](size_t totalItems) {
+        g_MsgRegistry.PushLog(L"Scan complete. Found " + std::to_wstring(totalItems) + L" items.");
+        PostMessageW(g_hWndMain, WM_SYNC_EVENT, 0, 0);
+    };
+    callbacks.onCompareStart = []() {
+        g_MsgRegistry.SetStatus(L"Comparing directory structures...");
+        PostMessageW(g_hWndMain, WM_SYNC_EVENT, 0, 0);
+    };
+    callbacks.onCompareComplete = [](size_t dirsToCreate, size_t filesToCopy, size_t itemsToDelete) {
+        std::wstring plan = L"Plan: Create " + std::to_wstring(dirsToCreate) + L" dirs, Copy " +
+                            std::to_wstring(filesToCopy) + L" files, Prune " + std::to_wstring(itemsToDelete) + L" items.";
+        g_MsgRegistry.PushLog(plan);
+        PostMessageW(g_hWndMain, WM_SYNC_EVENT, 0, 0);
+    };
+    callbacks.onCopyStart = [](const std::wstring& relPath, unsigned long long fileSizeBytes, size_t fileIndex, size_t totalFiles) {
+        g_MsgRegistry.SetStatus(L"[" + std::to_wstring(fileIndex) + L"/" + std::to_wstring(totalFiles) + L"] Syncing: " + relPath);
+        g_MsgRegistry.PushLog(L"Syncing: " + relPath + L" (" + std::to_wstring(fileSizeBytes / 1024) + L" KB)");
+        PostMessageW(g_hWndMain, WM_SYNC_EVENT, 0, 0);
+    };
+    callbacks.onCopyProgress = [](unsigned long long bytesCopied, unsigned long long fileSizeBytes) {
+        if (fileSizeBytes > 0) {
+            int pct = static_cast<int>(bytesCopied * 100 / fileSizeBytes);
+            g_MsgRegistry.SetProgress(pct);
+            PostMessageW(g_hWndMain, WM_SYNC_EVENT, 0, 0);
+        }
+    };
+    callbacks.onCopyComplete = [](const std::wstring& relPath, bool success, const std::wstring& errorMessage) {
+        if (success) {
+            g_MsgRegistry.PushLog(L"  ✔ Success: " + relPath);
+        } else {
+            g_MsgRegistry.PushLog(L"  ✘ Failed: " + relPath + L" - " + errorMessage);
+        }
+        g_MsgRegistry.SetProgress(0);
+        PostMessageW(g_hWndMain, WM_SYNC_EVENT, 0, 0);
+    };
+    callbacks.onDeleteItem = [](const std::wstring& relPath, bool isDirectory) {
+        std::wstring typeStr = isDirectory ? L"directory" : L"file";
+        g_MsgRegistry.PushLog(L"[PRUNE] Archiving " + typeStr + L": " + relPath);
+        PostMessageW(g_hWndMain, WM_SYNC_EVENT, 0, 0);
+    };
+    callbacks.onDeleteFailed = [](const std::wstring& relPath, const std::wstring& errorMessage) {
+        g_MsgRegistry.PushLog(L"[PRUNE] Archive failed: " + relPath + L" (" + errorMessage + L")");
+        PostMessageW(g_hWndMain, WM_SYNC_EVENT, 0, 0);
+    };
+    callbacks.onLog = [](const std::wstring& message, bool isError) {
+        std::wstring prefix = isError ? L"[ERROR] " : L"[INFO] ";
+        g_MsgRegistry.PushLog(prefix + message);
+        PostMessageW(g_hWndMain, WM_SYNC_EVENT, 0, 0);
+    };
+
+    size_t completedJobs = 0;
+    for (size_t i = 0; i < jobs.size(); ++i) {
+        g_MsgRegistry.PushLog(L"=== Queue job " + std::to_wstring(i + 1) + L"/" + std::to_wstring(jobs.size()) +
+                              L": " + jobs[i].name + L" ===");
+        PostMessageW(g_hWndMain, WM_SYNC_EVENT, 0, 0);
+        ChronoSync::SyncStats stats = ChronoSync::SyncEngine::Sync(jobs[i].source, jobs[i].destination, jobs[i].options, callbacks);
+        if (stats.filesCopied > 0 || stats.itemsDeleted > 0 || stats.dirsCreated > 0) {
+            completedJobs++;
+        }
+    }
+
+    size_t* pCompleted = new size_t(completedJobs);
+    PostMessageW(g_hWndMain, WM_SYNC_QUEUE_COMPLETE, static_cast<WPARAM>(jobs.size()), (LPARAM)pCompleted);
 }
 
 // Background thread undo runner
@@ -647,24 +858,48 @@ void CreateControls(HWND hWnd, HINSTANCE hInstance) {
     g_hWndLoadProfileBtn = CreateWindowExW(0, L"BUTTON", L"Load Profile...", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                                            170, 268, 140, 28, hWnd, (HMENU)ID_LOAD_PROFILE_BUTTON, hInstance, NULL);
 
-    // Split buttons layout
-    g_hWndPreviewBtn = CreateWindowExW(0, L"BUTTON", L"Preview Changes", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 
-                                       20, 308, 280, 36, hWnd, (HMENU)ID_PREVIEW_BUTTON, hInstance, NULL);
-    g_hWndSyncBtn = CreateWindowExW(0, L"BUTTON", L"Sync Now", WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON, 
-                                    320, 308, 280, 36, hWnd, (HMENU)ID_SYNC_BUTTON, hInstance, NULL);
+    g_hWndSha256Check = CreateWindowExW(0, L"BUTTON", L"SHA256 compare", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                                        20, 302, 150, 20, hWnd, (HMENU)ID_SHA256_CHECKBOX, hInstance, NULL);
+    g_hWndVerifyCheck = CreateWindowExW(0, L"BUTTON", L"Verify after copy", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                                        180, 302, 150, 20, hWnd, (HMENU)ID_VERIFY_COPY_CHECKBOX, hInstance, NULL);
+    g_hWndVersionedBackupCheck = CreateWindowExW(0, L"BUTTON", L"Versioned backups", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                                                 340, 302, 170, 20, hWnd, (HMENU)ID_VERSIONED_BACKUP_CHECKBOX, hInstance, NULL);
+    SendMessageW(g_hWndVersionedBackupCheck, BM_SETCHECK, BST_CHECKED, 0);
 
-    g_hWndStatusLabel = CreateWindowExW(0, L"STATIC", L"Ready", WS_CHILD | WS_VISIBLE, 
-                                        20, 358, 580, 20, hWnd, (HMENU)ID_STATUS_LABEL, hInstance, NULL);
+    g_hWndPreviewBtn = CreateWindowExW(0, L"BUTTON", L"Preview Changes", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                                       20, 332, 280, 36, hWnd, (HMENU)ID_PREVIEW_BUTTON, hInstance, NULL);
+    g_hWndSyncBtn = CreateWindowExW(0, L"BUTTON", L"Sync Now", WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+                                    320, 332, 280, 36, hWnd, (HMENU)ID_SYNC_BUTTON, hInstance, NULL);
 
-    g_hWndProgressBar = CreateWindowExW(0, PROGRESS_CLASSW, L"", WS_CHILD | WS_VISIBLE, 
-                                        20, 378, 580, 20, hWnd, (HMENU)ID_PROGRESS_BAR, hInstance, NULL);
+    HWND lblQueue = CreateWindowExW(0, L"STATIC", L"Sync Queue:", WS_CHILD | WS_VISIBLE,
+                                      20, 378, 120, 20, hWnd, NULL, hInstance, NULL);
+    g_hWndQueueList = CreateWindowExW(WS_EX_CLIENTEDGE, L"LISTBOX", L"",
+                                      WS_CHILD | WS_VISIBLE | LBS_NOTIFY | WS_VSCROLL,
+                                      20, 398, 580, 72, hWnd, (HMENU)ID_QUEUE_LISTBOX, hInstance, NULL);
 
-    HWND lblLog = CreateWindowExW(0, L"STATIC", L"Operation Log:", WS_CHILD | WS_VISIBLE, 
-                                  20, 408, 120, 20, hWnd, NULL, hInstance, NULL);
+    g_hWndAddQueueBtn = CreateWindowExW(0, L"BUTTON", L"Add to Queue", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                                        20, 478, 105, 28, hWnd, (HMENU)ID_ADD_QUEUE_BUTTON, hInstance, NULL);
+    g_hWndRunQueueBtn = CreateWindowExW(0, L"BUTTON", L"Run Queue", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                                        130, 478, 105, 28, hWnd, (HMENU)ID_RUN_QUEUE_BUTTON, hInstance, NULL);
+    g_hWndClearQueueBtn = CreateWindowExW(0, L"BUTTON", L"Clear Queue", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                                          240, 478, 105, 28, hWnd, (HMENU)ID_CLEAR_QUEUE_BUTTON, hInstance, NULL);
+    g_hWndSaveQueueBtn = CreateWindowExW(0, L"BUTTON", L"Save Queue...", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                                         350, 478, 115, 28, hWnd, (HMENU)ID_SAVE_QUEUE_BUTTON, hInstance, NULL);
+    g_hWndLoadQueueBtn = CreateWindowExW(0, L"BUTTON", L"Load Queue...", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                                         470, 478, 130, 28, hWnd, (HMENU)ID_LOAD_QUEUE_BUTTON, hInstance, NULL);
 
-    g_hWndLogEdit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"", 
-                                    WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY | WS_VSCROLL, 
-                                    20, 431, 580, 150, hWnd, (HMENU)ID_LOG_EDIT, hInstance, NULL);
+    g_hWndStatusLabel = CreateWindowExW(0, L"STATIC", L"Ready", WS_CHILD | WS_VISIBLE,
+                                        20, 516, 580, 20, hWnd, (HMENU)ID_STATUS_LABEL, hInstance, NULL);
+
+    g_hWndProgressBar = CreateWindowExW(0, PROGRESS_CLASSW, L"", WS_CHILD | WS_VISIBLE,
+                                        20, 536, 580, 20, hWnd, (HMENU)ID_PROGRESS_BAR, hInstance, NULL);
+
+    HWND lblLog = CreateWindowExW(0, L"STATIC", L"Operation Log:", WS_CHILD | WS_VISIBLE,
+                                  20, 566, 120, 20, hWnd, NULL, hInstance, NULL);
+
+    g_hWndLogEdit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"",
+                                    WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY | WS_VSCROLL,
+                                    20, 589, 580, 110, hWnd, (HMENU)ID_LOG_EDIT, hInstance, NULL);
 
     // Apply fonts
     SendMessageW(lblSrc, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
@@ -682,8 +917,18 @@ void CreateControls(HWND hWnd, HINSTANCE hInstance) {
     SendMessageW(g_hWndIncludeEdit, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
     SendMessageW(g_hWndSaveProfileBtn, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
     SendMessageW(g_hWndLoadProfileBtn, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
+    SendMessageW(g_hWndSha256Check, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
+    SendMessageW(g_hWndVerifyCheck, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
+    SendMessageW(g_hWndVersionedBackupCheck, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
     SendMessageW(g_hWndPreviewBtn, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
     SendMessageW(g_hWndSyncBtn, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
+    SendMessageW(lblQueue, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
+    SendMessageW(g_hWndQueueList, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
+    SendMessageW(g_hWndAddQueueBtn, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
+    SendMessageW(g_hWndRunQueueBtn, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
+    SendMessageW(g_hWndClearQueueBtn, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
+    SendMessageW(g_hWndSaveQueueBtn, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
+    SendMessageW(g_hWndLoadQueueBtn, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
     SendMessageW(g_hWndStatusLabel, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
     SendMessageW(lblLog, WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
     SendMessageW(g_hWndLogEdit, WM_SETFONT, (WPARAM)g_hFontLog, TRUE);
@@ -729,14 +974,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 std::wstring path = BrowseForFolder(hWnd, L"Select Destination Folder");
                 if (!path.empty()) {
                     SetWindowTextW(g_hWndDestEdit, path.c_str());
-                    
-                    // Check if .chrono_trash exists to enable the Undo button
-                    std::wstring trashPath = path + L"\\.chrono_trash";
-                    if (std::filesystem::exists(trashPath)) {
-                        EnableWindow(g_hWndUndoBtn, TRUE);
-                    } else {
-                        EnableWindow(g_hWndUndoBtn, FALSE);
-                    }
+                    UpdateUndoButtonState(path);
                 }
             } else if (wmId == ID_UNDO_BUTTON) {
                 wchar_t dest[MAX_PATH];
@@ -773,16 +1011,67 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     break;
                 }
 
-                bool prune = (SendMessageW(g_hWndPruneCheck, BM_GETCHECK, 0, 0) == BST_CHECKED);
-                ChronoSync::FilterOptions filters = GetFiltersFromUI();
+                ChronoSync::SyncOptions options = GetSyncOptionsFromUI();
 
                 SetControlsState(FALSE);
                 SetWindowTextW(g_hWndLogEdit, L"");
 
-                // Spawn background preview thread
                 g_SyncRunning = true;
-                std::thread t(PreviewThreadProc, sourcePath, destPath, prune, filters);
+                std::thread t(PreviewThreadProc, sourcePath, destPath, options);
                 t.detach();
+            } else if (wmId == ID_ADD_QUEUE_BUTTON) {
+                ChronoSync::SyncJob job = BuildJobFromUI();
+                if (job.source.empty() || job.destination.empty()) {
+                    MessageBoxW(hWnd, L"Please select both source and destination folders before adding to the queue.",
+                                L"ChronoSync Queue", MB_OK | MB_ICONWARNING);
+                    break;
+                }
+                if (job.source == job.destination) {
+                    MessageBoxW(hWnd, L"Source and destination folders cannot be the same.", L"ChronoSync Queue", MB_OK | MB_ICONWARNING);
+                    break;
+                }
+                g_SyncJobQueue.push_back(std::move(job));
+                RefreshQueueListbox();
+            } else if (wmId == ID_CLEAR_QUEUE_BUTTON) {
+                g_SyncJobQueue.clear();
+                RefreshQueueListbox();
+            } else if (wmId == ID_RUN_QUEUE_BUTTON) {
+                if (g_SyncJobQueue.empty()) {
+                    MessageBoxW(hWnd, L"The sync queue is empty.", L"ChronoSync Queue", MB_OK | MB_ICONINFORMATION);
+                    break;
+                }
+                SetControlsState(FALSE);
+                SetWindowTextW(g_hWndLogEdit, L"");
+                g_SyncRunning = true;
+                std::thread t(QueueThreadProc, g_SyncJobQueue);
+                t.detach();
+            } else if (wmId == ID_SAVE_QUEUE_BUTTON) {
+                if (g_SyncJobQueue.empty()) {
+                    MessageBoxW(hWnd, L"No jobs in the queue to save.", L"ChronoSync Queue", MB_OK | MB_ICONWARNING);
+                    break;
+                }
+                std::wstring path = SaveQueueDialog(hWnd);
+                if (!path.empty()) {
+                    std::wstring error;
+                    if (ChronoSync::SyncJobQueueIO::SaveToFile(g_SyncJobQueue, path, error)) {
+                        MessageBoxW(hWnd, L"Queue saved successfully.", L"ChronoSync Queue", MB_OK | MB_ICONINFORMATION);
+                    } else {
+                        MessageBoxW(hWnd, (L"Failed to save queue: " + error).c_str(), L"ChronoSync Queue", MB_OK | MB_ICONERROR);
+                    }
+                }
+            } else if (wmId == ID_LOAD_QUEUE_BUTTON) {
+                std::wstring path = OpenQueueDialog(hWnd);
+                if (!path.empty()) {
+                    std::vector<ChronoSync::SyncJob> loaded;
+                    std::wstring error;
+                    if (ChronoSync::SyncJobQueueIO::LoadFromFile(path, loaded, error)) {
+                        g_SyncJobQueue = std::move(loaded);
+                        RefreshQueueListbox();
+                        MessageBoxW(hWnd, L"Queue loaded successfully.", L"ChronoSync Queue", MB_OK | MB_ICONINFORMATION);
+                    } else {
+                        MessageBoxW(hWnd, (L"Failed to load queue: " + error).c_str(), L"ChronoSync Queue", MB_OK | MB_ICONERROR);
+                    }
+                }
             } else if (wmId == ID_SAVE_PROFILE_BUTTON) {
                 ChronoSync::SyncProfile profile = BuildProfileFromUI();
                 if (profile.source.empty() || profile.destination.empty()) {
@@ -828,15 +1117,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
                     break;
                 }
 
-                bool prune = (SendMessageW(g_hWndPruneCheck, BM_GETCHECK, 0, 0) == BST_CHECKED);
-                ChronoSync::FilterOptions filters = GetFiltersFromUI();
+                ChronoSync::SyncOptions options = GetSyncOptionsFromUI();
 
                 SetControlsState(FALSE);
                 SetWindowTextW(g_hWndLogEdit, L"");
 
-                // Start sync on background thread
                 g_SyncRunning = true;
-                std::thread t(SyncThreadProc, sourcePath, destPath, prune, filters);
+                std::thread t(SyncThreadProc, sourcePath, destPath, options);
                 t.detach();
             }
             break;
@@ -903,18 +1190,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
                    << L"Files Transferred:   " << pStats->filesCopied << L"\n"
                    << L"Files Skipped:       " << pStats->filesSkipped << L"\n"
                    << L"Items Pruned/Backed: " << pStats->itemsDeleted << L"\n"
+                   << L"Files Verified:      " << pStats->filesVerified << L"\n"
+                   << L"Verify Failures:     " << pStats->verifyFailures << L"\n"
                    << L"Total Bytes Written: " << (pStats->totalBytesCopied / (1024.0 * 1024.0)) << L" MB (" << pStats->totalBytesCopied << L" bytes)\n\n"
                    << L"Time Taken: " << std::fixed << std::setprecision(2) << (pStats->totalTimeMs / 1000.0) << L" seconds.";
                 
+                wchar_t dest[MAX_PATH];
+                GetWindowTextW(g_hWndDestEdit, dest, MAX_PATH);
                 if (pStats->itemsDeleted > 0) {
                     EnableWindow(g_hWndUndoBtn, TRUE);
-                    ss << L"\n\nNote: Deleted items have been backed up in '.chrono_trash'. You can restore them by clicking 'Undo Pruning'.";
+                    ss << L"\n\nNote: Pruned items were backed up under '.chrono_backups' (or '.chrono_trash'). Use 'Undo Pruning' to restore the latest backup.";
                 } else {
-                    // Check if trash still exists in case itemsDeleted == 0 but prior folder resides
-                    wchar_t dest[MAX_PATH];
-                    GetWindowTextW(g_hWndDestEdit, dest, MAX_PATH);
-                    std::wstring trashPath = std::wstring(dest) + L"\\.chrono_trash";
-                    EnableWindow(g_hWndUndoBtn, std::filesystem::exists(trashPath) ? TRUE : FALSE);
+                    UpdateUndoButtonState(dest);
                 }
 
                 MessageBoxW(hWnd, ss.str().c_str(), L"ChronoSync Run Summary", MB_OK | MB_ICONINFORMATION);
@@ -933,8 +1220,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
             // Re-evaluate undo button availability
             wchar_t dest[MAX_PATH];
             GetWindowTextW(g_hWndDestEdit, dest, MAX_PATH);
-            std::wstring trashPath = std::wstring(dest) + L"\\.chrono_trash";
-            EnableWindow(g_hWndUndoBtn, std::filesystem::exists(trashPath) ? TRUE : FALSE);
+            UpdateUndoButtonState(dest);
 
             if (pList) {
                 if (pList->empty()) {
@@ -979,10 +1265,25 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
         case WM_SYNC_UNDO_COMPLETE: {
             g_SyncRunning = false;
             SetControlsState(TRUE);
-            EnableWindow(g_hWndUndoBtn, FALSE); // Disabled since trash is now empty
+            EnableWindow(g_hWndUndoBtn, FALSE);
             SetWindowTextW(g_hWndStatusLabel, L"Ready");
             SendMessageW(g_hWndProgressBar, PBM_SETPOS, 0, 0);
             MessageBoxW(hWnd, L"Undo complete. Pruned items have been restored successfully.", L"ChronoSync Undo", MB_OK | MB_ICONINFORMATION);
+            break;
+        }
+        case WM_SYNC_QUEUE_COMPLETE: {
+            g_SyncRunning = false;
+            SetControlsState(TRUE);
+            SendMessageW(g_hWndProgressBar, PBM_SETPOS, 0, 0);
+            SetWindowTextW(g_hWndStatusLabel, L"Ready");
+
+            size_t totalJobs = static_cast<size_t>(wParam);
+            std::unique_ptr<size_t> pCompleted(reinterpret_cast<size_t*>(lParam));
+            size_t completed = pCompleted ? *pCompleted : 0;
+
+            std::wstringstream ss;
+            ss << L"Queue finished.\n\nJobs run: " << totalJobs << L"\nJobs with changes: " << completed;
+            MessageBoxW(hWnd, ss.str().c_str(), L"ChronoSync Queue", MB_OK | MB_ICONINFORMATION);
             break;
         }
         case WM_CLOSE: {
@@ -1331,8 +1632,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         return 0;
     }
 
-    // Adjust size so client area is 620x600
-    RECT rect = {0, 0, 620, 600};
+    // Adjust size so client area is 620x710
+    RECT rect = {0, 0, 620, 710};
     AdjustWindowRectEx(&rect, WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, FALSE, 0);
 
     // Create Main GUI Window

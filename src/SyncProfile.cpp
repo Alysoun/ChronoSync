@@ -162,6 +162,31 @@ namespace ChronoSync {
         return values;
     }
 
+    static bool ExtractJsonNumber(const std::string& json, const std::string& key, size_t& outValue) {
+        const std::string needle = "\"" + key + "\"";
+        size_t keyPos = json.find(needle);
+        if (keyPos == std::string::npos) {
+            return false;
+        }
+        size_t colon = json.find(':', keyPos + needle.size());
+        if (colon == std::string::npos) {
+            return false;
+        }
+        size_t start = colon + 1;
+        while (start < json.size() && (json[start] == ' ' || json[start] == '\t')) {
+            ++start;
+        }
+        size_t end = start;
+        while (end < json.size() && json[end] >= '0' && json[end] <= '9') {
+            ++end;
+        }
+        if (end == start) {
+            return false;
+        }
+        outValue = static_cast<size_t>(std::stoull(json.substr(start, end - start)));
+        return true;
+    }
+
     bool SyncProfileIO::SaveToFile(const SyncProfile& profile, const std::wstring& filePath, std::wstring& errorMessage) {
         std::ofstream out(filePath, std::ios::binary | std::ios::trunc);
         if (!out) {
@@ -174,21 +199,25 @@ namespace ChronoSync {
         out << "  \"name\": \"" << EscapeJson(profile.name) << "\",\n";
         out << "  \"source\": \"" << EscapeJson(profile.source) << "\",\n";
         out << "  \"destination\": \"" << EscapeJson(profile.destination) << "\",\n";
-        out << "  \"prune\": " << (profile.prune ? "true" : "false") << ",\n";
+        out << "  \"prune\": " << (profile.options.prune ? "true" : "false") << ",\n";
+        out << "  \"sha256Compare\": " << (profile.options.compareMode == CompareMode::Sha256 ? "true" : "false") << ",\n";
+        out << "  \"verifyAfterCopy\": " << (profile.options.verifyAfterCopy ? "true" : "false") << ",\n";
+        out << "  \"versionedBackups\": " << (profile.options.versionedBackups ? "true" : "false") << ",\n";
+        out << "  \"maxBackupVersions\": " << profile.options.maxBackupVersions << ",\n";
         out << "  \"includePatterns\": [";
-        for (size_t i = 0; i < profile.filters.includePatterns.size(); ++i) {
+        for (size_t i = 0; i < profile.options.filters.includePatterns.size(); ++i) {
             if (i > 0) {
                 out << ", ";
             }
-            out << "\"" << EscapeJson(profile.filters.includePatterns[i]) << "\"";
+            out << "\"" << EscapeJson(profile.options.filters.includePatterns[i]) << "\"";
         }
         out << "],\n";
         out << "  \"excludePatterns\": [";
-        for (size_t i = 0; i < profile.filters.excludePatterns.size(); ++i) {
+        for (size_t i = 0; i < profile.options.filters.excludePatterns.size(); ++i) {
             if (i > 0) {
                 out << ", ";
             }
-            out << "\"" << EscapeJson(profile.filters.excludePatterns[i]) << "\"";
+            out << "\"" << EscapeJson(profile.options.filters.excludePatterns[i]) << "\"";
         }
         out << "]\n";
         out << "}\n";
@@ -227,14 +256,21 @@ namespace ChronoSync {
             errorMessage = L"Profile is missing a destination path.";
             return false;
         }
-        ExtractJsonBool(json, "prune", loaded.prune);
+        ExtractJsonBool(json, "prune", loaded.options.prune);
+        bool sha256 = false;
+        if (ExtractJsonBool(json, "sha256Compare", sha256) && sha256) {
+            loaded.options.compareMode = CompareMode::Sha256;
+        }
+        ExtractJsonBool(json, "verifyAfterCopy", loaded.options.verifyAfterCopy);
+        ExtractJsonBool(json, "versionedBackups", loaded.options.versionedBackups);
+        ExtractJsonNumber(json, "maxBackupVersions", loaded.options.maxBackupVersions);
 
-        loaded.filters.includePatterns = ExtractJsonStringArray(json, "includePatterns");
+        loaded.options.filters.includePatterns = ExtractJsonStringArray(json, "includePatterns");
         auto exclude = ExtractJsonStringArray(json, "excludePatterns");
         if (!exclude.empty()) {
-            loaded.filters.excludePatterns = std::move(exclude);
-        } else {
-            loaded.filters = FilterOptions::Defaults();
+            loaded.options.filters.excludePatterns = std::move(exclude);
+        } else if (loaded.options.filters.includePatterns.empty()) {
+            loaded.options.filters = FilterOptions::Defaults();
         }
 
         profile = std::move(loaded);

@@ -7,6 +7,7 @@
 #include <cassert>
 #include "SyncEngine.h"
 #include "PathFilter.h"
+#include "SyncOptions.h"
 
 namespace fs = std::filesystem;
 
@@ -19,6 +20,14 @@ ChronoSync::SyncCallbacks GetTestCallbacks() {
         }
     };
     return cb;
+}
+
+ChronoSync::SyncOptions MakeTestOptions(bool prune, const ChronoSync::FilterOptions& filters = {}) {
+    ChronoSync::SyncOptions opts;
+    opts.prune = prune;
+    opts.filters = filters;
+    opts.versionedBackups = false;
+    return opts;
 }
 
 void WriteTestFile(const fs::path& path, const std::string& content) {
@@ -68,7 +77,7 @@ int main() {
     std::wcout << L"ChronoSync Automated Verification Test Suite" << std::endl;
     std::wcout << L"==============================================" << std::endl;
 
-    ChronoSync::FilterOptions noFilters;
+    ChronoSync::SyncOptions noFilters = MakeTestOptions(false);
 
     fs::path sandbox = fs::current_path() / L"test_sandbox";
     fs::path srcDir = sandbox / L"source";
@@ -98,7 +107,7 @@ int main() {
 
     std::wcout << L"[2/6] Executing initial full synchronization..." << std::endl;
     auto callbacks = GetTestCallbacks();
-    ChronoSync::SyncStats initialStats = ChronoSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), false, noFilters, callbacks);
+    ChronoSync::SyncStats initialStats = ChronoSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), noFilters, callbacks);
 
     // Assert initial sync copied everything
     std::wcout << L"      Initial sync transferred " << initialStats.filesCopied << L" files." << std::endl;
@@ -135,7 +144,7 @@ int main() {
     WriteTestFile(destDir / L"folder1/abandoned_nested.txt", "Should be pruned nested");
 
     std::wcout << L"[4/6] Executing differential synchronization with pruning..." << std::endl;
-    ChronoSync::SyncStats diffStats = ChronoSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), true, noFilters, callbacks);
+    ChronoSync::SyncStats diffStats = ChronoSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), MakeTestOptions(true), callbacks);
 
     std::wcout << L"      Differential files copied: " << diffStats.filesCopied << std::endl;
     std::wcout << L"      Differential files skipped: " << diffStats.filesSkipped << std::endl;
@@ -179,7 +188,7 @@ int main() {
     assert(junctionCreated && "Failed to create source junction for test");
 
     // Run sync again to sync the junction
-    ChronoSync::SyncStats junctionStats = ChronoSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), true, noFilters, callbacks);
+    ChronoSync::SyncStats junctionStats = ChronoSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), MakeTestOptions(true), callbacks);
     std::wcout << L"      Junction sync completed. Created: " << junctionStats.dirsCreated << L" dirs/junctions, " << junctionStats.filesCopied << L" files." << std::endl;
 
     // Verify destination junction exists, is a reparse point, and points to the correct target
@@ -206,7 +215,7 @@ int main() {
     BOOL removeSrcOk = RemoveDirectoryW(srcJunction.c_str());
     assert(removeSrcOk && "Failed to remove source junction for pruning test");
 
-    ChronoSync::SyncStats pruneJunctionStats = ChronoSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), true, noFilters, callbacks);
+    ChronoSync::SyncStats pruneJunctionStats = ChronoSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), MakeTestOptions(true), callbacks);
     assert(pruneJunctionStats.itemsDeleted == 1 && "Pruning should delete the junction at destination");
     assert(!fs::exists(destJunction) && "Destination junction should be deleted");
 
@@ -224,7 +233,7 @@ int main() {
     WriteTestFile(excludedTrashDir / L"trash_file.txt", "Trash file content");
 
     // Run sync again
-    ChronoSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), true, noFilters, callbacks);
+    ChronoSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), MakeTestOptions(true), callbacks);
 
     // Verify none of the excluded paths exist in destination
     assert(!fs::exists(destDir / L"folder2/nested/.chrono_trash") && ".chrono_trash directory at depth should be excluded");
@@ -238,8 +247,8 @@ int main() {
     WriteTestFile(srcDir / L"node_modules/pkg/index.js", "module payload");
     WriteTestFile(srcDir / L"allowed.txt", "allowed payload");
 
-    ChronoSync::FilterOptions defaultFilters = ChronoSync::FilterOptions::Defaults();
-    ChronoSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), false, defaultFilters, callbacks);
+    ChronoSync::SyncOptions defaultFilters = MakeTestOptions(false, ChronoSync::FilterOptions::Defaults());
+    ChronoSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), defaultFilters, callbacks);
 
     assert(!fs::exists(destDir / L"cache/data.pkl") && "*.pkl files should be excluded");
     assert(!fs::exists(destDir / L"archive.zip") && "*.zip files should be excluded");
@@ -250,22 +259,47 @@ int main() {
     WriteTestFile(srcDir / L"build/obj/artifact.bin", "build artifact");
     WriteTestFile(srcDir / L"build/allowed.bin", "allowed in build");
 
-    ChronoSync::FilterOptions slashFilters = ChronoSync::FilterOptions::FromSemicolonList(L"", L"build/obj");
-    ChronoSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), false, slashFilters, callbacks);
+    ChronoSync::SyncOptions slashFilters = MakeTestOptions(false, ChronoSync::FilterOptions::FromSemicolonList(L"", L"build/obj"));
+    ChronoSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), slashFilters, callbacks);
     assert(!fs::exists(destDir / L"build/obj/artifact.bin") && "build/obj with forward slashes should be excluded");
     assert(fs::exists(destDir / L"build/allowed.bin") && "sibling paths under build/ should still sync");
 
     std::wcout << L"[10/11] Verifying trailing semicolon and empty-pattern guards..." << std::endl;
     WriteTestFile(srcDir / L"trailing_guard.txt", "should still sync");
 
-    ChronoSync::FilterOptions trailingFilters = ChronoSync::FilterOptions::FromSemicolonList(L"", L"*.pkl;node_modules;");
-    assert(trailingFilters.excludePatterns.size() == 2 && "trailing semicolon must not create an empty pattern");
-    ChronoSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), false, trailingFilters, callbacks);
+    ChronoSync::SyncOptions trailingFilters = MakeTestOptions(false, ChronoSync::FilterOptions::FromSemicolonList(L"", L"*.pkl;node_modules;"));
+    assert(trailingFilters.filters.excludePatterns.size() == 2 && "trailing semicolon must not create an empty pattern");
+    ChronoSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), trailingFilters, callbacks);
     assert(fs::exists(destDir / L"trailing_guard.txt") && "trailing semicolon must not exclude everything");
     assert(!ChronoSync::PathFilter::GlobMatch(L"", L"anything") && "empty glob pattern must not match");
     assert(!ChronoSync::PathFilter::MatchesPattern(L"", L"path", L"name", false) && "empty match pattern must not match");
 
-    std::wcout << L"[11/11] Cleaning up test sandbox..." << std::endl;
+    std::wcout << L"[11/13] Verifying SHA256 compare mode..." << std::endl;
+    WriteTestFile(srcDir / L"sha_test/equal_time.txt", "aaaaaaaaaaaaaaaaaaaa");
+    WriteTestFile(destDir / L"sha_test/equal_time.txt", "bbbbbbbbbbbbbbbbbbbb");
+    auto shaSrcTime = fs::last_write_time(srcDir / L"sha_test/equal_time.txt");
+    fs::last_write_time(destDir / L"sha_test/equal_time.txt", shaSrcTime, ec);
+
+    ChronoSync::SyncOptions timestampOpts = MakeTestOptions(false);
+    ChronoSync::SyncStats tsStats = ChronoSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), timestampOpts, callbacks);
+    assert(tsStats.filesCopied == 0 && "timestamp mode should not copy equal-time same-size files");
+    assert(fs::file_size(destDir / L"sha_test/equal_time.txt") == 20 && "timestamp mode should leave destination bytes unchanged");
+
+    ChronoSync::SyncOptions shaOpts = MakeTestOptions(false);
+    shaOpts.compareMode = ChronoSync::CompareMode::Sha256;
+    ChronoSync::SyncStats shaStats = ChronoSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), shaOpts, callbacks);
+    assert(shaStats.filesCopied == 1 && "SHA256 mode should copy when content differs");
+
+    std::wcout << L"[12/13] Verifying versioned backup folders..." << std::endl;
+    WriteTestFile(destDir / L"versioned_prune_me.txt", "old version");
+    ChronoSync::SyncOptions versionedPrune = MakeTestOptions(true);
+    versionedPrune.versionedBackups = true;
+    versionedPrune.maxBackupVersions = 3;
+    ChronoSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), versionedPrune, callbacks);
+    assert(!fs::exists(destDir / L"versioned_prune_me.txt") && "pruned file should be removed from destination");
+    assert(fs::exists(destDir / L".chrono_backups") && "versioned backups root should exist");
+
+    std::wcout << L"[13/13] Cleaning up test sandbox..." << std::endl;
     fs::remove_all(sandbox, ec);
 
     std::wcout << L"\n==============================================" << std::endl;
