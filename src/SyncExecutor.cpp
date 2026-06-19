@@ -10,7 +10,7 @@
 #define IO_REPARSE_TAG_MOUNT_POINT 0xA0000003L
 #endif
 
-namespace ChronoSync {
+namespace PrevueSync {
 
     struct CopyContext {
         std::function<void(unsigned long long bytesCopied, unsigned long long fileSize)> progressCallback;
@@ -46,7 +46,7 @@ namespace ChronoSync {
                                   const std::vector<PlannedDelete>& itemsToDelete,
                                   const SyncCallbacks& callbacks,
                                   SyncStats& stats) {
-        std::filesystem::path backupRoot = destRoot / L".chrono_backups";
+        std::filesystem::path backupRoot = destRoot / L".prevue_backups";
         std::filesystem::path trashRoot;
         std::error_code ec;
         bool backupFolderCreated = false;
@@ -82,7 +82,7 @@ namespace ChronoSync {
                         if (options.versionedBackups) {
                             trashRoot = backupRoot / MakeBackupTimestamp();
                         } else {
-                            trashRoot = destRoot / L".chrono_trash";
+                            trashRoot = destRoot / L".prevue_trash";
                             std::filesystem::remove_all(trashRoot, ec);
                         }
                         std::filesystem::create_directories(trashRoot, ec);
@@ -164,7 +164,7 @@ namespace ChronoSync {
             try {
             std::filesystem::path srcPath = WinPath::Join(srcRoot, fileItem.relativePath);
             std::filesystem::path destPath = WinPath::Join(destRoot, fileItem.relativePath);
-            std::filesystem::path tmpPath = std::filesystem::path(destPath.wstring() + L".chrono_tmp");
+            std::filesystem::path tmpPath = std::filesystem::path(destPath.wstring() + L".prevue_tmp");
 
             if (callbacks.onCopyStart) {
                 callbacks.onCopyStart(fileItem.relativePath, fileItem.fileSize, i + 1, filesToCopy.size() + linkCount);
@@ -471,4 +471,4 @@ namespace ChronoSync {
         ExecuteCreateLinksPhase(srcRoot, destRoot, plan.linksToCreate, plan.filesToCopy.size(), callbacks, stats);
     }
 
-} // namespace ChronoSync
+} // namespace PrevueSync

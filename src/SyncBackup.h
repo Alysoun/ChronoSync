@@ -5,7 +5,7 @@
 #include <filesystem>
 #include <string>
 
-namespace ChronoSync {
+namespace PrevueSync {
 
     std::wstring MakeBackupTimestamp();
 
@@ -18,4 +18,4 @@ namespace ChronoSync {
                           Sha256Session* session = nullptr,
                           const SyncCallbacks* callbacks = nullptr);
 
-} // namespace ChronoSync
+} // namespace PrevueSync

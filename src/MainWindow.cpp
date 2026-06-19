@@ -32,9 +32,9 @@ static bool g_logSplitterDragging = false;
 static int g_logSplitterDragStartY = 0;
 static int g_logSplitterBiasStart = 0;
 
-static std::wstring FormatRiskSummary(const ChronoSync::SyncPlanAnalysis& analysis) {
+static std::wstring FormatRiskSummary(const PrevueSync::SyncPlanAnalysis& analysis) {
     std::wstringstream ss;
-    ss << L"Risk: " << ChronoSync::RiskLevelToString(analysis.risk);
+    ss << L"Risk: " << PrevueSync::RiskLevelToString(analysis.risk);
     const size_t copies = analysis.filesToCopyNew + analysis.filesToCopyUpdate;
     const size_t removals = analysis.deletesPrune + analysis.deletesReplace;
     if (copies > 0 || analysis.totalBytesToTransfer > 0) {
@@ -51,7 +51,7 @@ static std::wstring FormatRiskSummary(const ChronoSync::SyncPlanAnalysis& analys
         ss << L"  |  Removals: " << removals;
         if (analysis.deletesReplace > 0 && analysis.deletesReplace <= 3) {
             for (const auto& entry : analysis.plannedRemovals) {
-                if (entry.reason == ChronoSync::DeleteReason::Replace) {
+                if (entry.reason == PrevueSync::DeleteReason::Replace) {
                     ss << L" (" << entry.relativePath << L")";
                 }
             }
@@ -63,7 +63,7 @@ static std::wstring FormatRiskSummary(const ChronoSync::SyncPlanAnalysis& analys
     return ss.str();
 }
 
-static void SetRiskIndicator(const ChronoSync::SyncPlanAnalysis& analysis) {
+static void SetRiskIndicator(const PrevueSync::SyncPlanAnalysis& analysis) {
     g_CachedPlanAnalysis = analysis;
     g_HasCachedPlanAnalysis = true;
     if (g_hWndRiskLabel) {
@@ -164,7 +164,7 @@ static void ClearOperationLog() {
 }
 
 static bool EnsureDisclaimerAccepted(HWND hWnd) {
-    return ChronoSync::PromptDisclaimerAcceptance(hWnd);
+    return PrevueSync::PromptDisclaimerAcceptance(hWnd);
 }
 
 static void LayoutMainWindow(HWND hWnd, int cx, int cy) {
@@ -302,21 +302,21 @@ static void LayoutMainWindow(HWND hWnd, int cx, int cy) {
     MoveWindow(g_hWndLogEdit, m, y, w, logH, TRUE);
 }
 
-static ChronoSync::FilterOptions GetFiltersFromUI() {
+static PrevueSync::FilterOptions GetFiltersFromUI() {
     wchar_t includeBuf[1024] = {};
     wchar_t excludeBuf[1024] = {};
     GetWindowTextW(g_hWndIncludeEdit, includeBuf, 1024);
     GetWindowTextW(g_hWndExcludeEdit, excludeBuf, 1024);
-    return ChronoSync::FilterOptions::FromSemicolonList(includeBuf, excludeBuf);
+    return PrevueSync::FilterOptions::FromSemicolonList(includeBuf, excludeBuf);
 }
 
-static ChronoSync::SyncOptions GetSyncOptionsFromUI() {
-    ChronoSync::SyncOptions opts;
+static PrevueSync::SyncOptions GetSyncOptionsFromUI() {
+    PrevueSync::SyncOptions opts;
     opts.prune = (SendMessageW(g_hWndPruneCheck, BM_GETCHECK, 0, 0) == BST_CHECKED);
     opts.filters = GetFiltersFromUI();
     opts.compareMode = (SendMessageW(g_hWndSha256Check, BM_GETCHECK, 0, 0) == BST_CHECKED)
-        ? ChronoSync::CompareMode::Sha256
-        : ChronoSync::CompareMode::Timestamp;
+        ? PrevueSync::CompareMode::Sha256
+        : PrevueSync::CompareMode::Timestamp;
     opts.verifyAfterCopy = (SendMessageW(g_hWndVerifyCheck, BM_GETCHECK, 0, 0) == BST_CHECKED);
     opts.versionedBackups = (SendMessageW(g_hWndVersionedBackupCheck, BM_GETCHECK, 0, 0) == BST_CHECKED);
     opts.deltaBlockCopy = (SendMessageW(g_hWndDeltaCopyCheck, BM_GETCHECK, 0, 0) == BST_CHECKED);
@@ -325,7 +325,7 @@ static ChronoSync::SyncOptions GetSyncOptionsFromUI() {
 }
 
 static void UpdateUndoButtonState(const std::wstring& destPath) {
-    EnableWindow(g_hWndUndoBtn, ChronoSync::SyncEngine::HasRestorableBackups(destPath) ? TRUE : FALSE);
+    EnableWindow(g_hWndUndoBtn, PrevueSync::SyncEngine::HasRestorableBackups(destPath) ? TRUE : FALSE);
 }
 
 static void RefreshQueueListbox() {
@@ -340,41 +340,41 @@ static void RefreshQueueListbox() {
     }
 }
 
-static void ApplyProfileToUI(const ChronoSync::SyncProfile& profile) {
+static void ApplyProfileToUI(const PrevueSync::SyncProfile& profile) {
     SetWindowTextW(g_hWndSrcEdit, profile.source.c_str());
     SetWindowTextW(g_hWndDestEdit, profile.destination.c_str());
     SendMessageW(g_hWndPruneCheck, BM_SETCHECK, profile.options.prune ? BST_CHECKED : BST_UNCHECKED, 0);
     SetWindowTextW(g_hWndIncludeEdit, profile.options.filters.IncludeToSemicolonList().c_str());
     SetWindowTextW(g_hWndExcludeEdit, profile.options.filters.ExcludeToSemicolonList().c_str());
     SendMessageW(g_hWndSha256Check, BM_SETCHECK,
-                 profile.options.compareMode == ChronoSync::CompareMode::Sha256 ? BST_CHECKED : BST_UNCHECKED, 0);
+                 profile.options.compareMode == PrevueSync::CompareMode::Sha256 ? BST_CHECKED : BST_UNCHECKED, 0);
     SendMessageW(g_hWndVerifyCheck, BM_SETCHECK, profile.options.verifyAfterCopy ? BST_CHECKED : BST_UNCHECKED, 0);
     SendMessageW(g_hWndVersionedBackupCheck, BM_SETCHECK, profile.options.versionedBackups ? BST_CHECKED : BST_UNCHECKED, 0);
     SendMessageW(g_hWndDeltaCopyCheck, BM_SETCHECK, profile.options.deltaBlockCopy ? BST_CHECKED : BST_UNCHECKED, 0);
     UpdateUndoButtonState(profile.destination);
 }
 
-static ChronoSync::SyncProfile BuildProfileFromUI() {
+static PrevueSync::SyncProfile BuildProfileFromUI() {
     wchar_t src[MAX_PATH] = {};
     wchar_t dest[MAX_PATH] = {};
     GetWindowTextW(g_hWndSrcEdit, src, MAX_PATH);
     GetWindowTextW(g_hWndDestEdit, dest, MAX_PATH);
 
-    ChronoSync::SyncProfile profile;
-    profile.name = L"ChronoSync Profile";
+    PrevueSync::SyncProfile profile;
+    profile.name = L"PrevueSync Profile";
     profile.source = src;
     profile.destination = dest;
     profile.options = GetSyncOptionsFromUI();
     return profile;
 }
 
-static ChronoSync::SyncJob BuildJobFromUI() {
+static PrevueSync::SyncJob BuildJobFromUI() {
     wchar_t src[MAX_PATH] = {};
     wchar_t dest[MAX_PATH] = {};
     GetWindowTextW(g_hWndSrcEdit, src, MAX_PATH);
     GetWindowTextW(g_hWndDestEdit, dest, MAX_PATH);
 
-    ChronoSync::SyncJob job;
+    PrevueSync::SyncJob job;
     job.name = L"Sync Job " + std::to_wstring(g_SyncJobQueue.size() + 1);
     job.source = src;
     job.destination = dest;
@@ -607,7 +607,7 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
             CreateControls(hWnd, ((LPCREATESTRUCT)lParam)->hInstance);
             ClearRiskIndicator();
-            if (!ChronoSync::PromptDisclaimerAcceptance(hWnd)) {
+            if (!PrevueSync::PromptDisclaimerAcceptance(hWnd)) {
                 DestroyWindow(hWnd);
             }
             break;
@@ -686,7 +686,7 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             }
 
             if (HIWORD(wParam) == STN_CLICKED && wmId == ID_DISCLAIMER_LINK) {
-                ChronoSync::ShowDisclaimerDialog(hWnd);
+                PrevueSync::ShowDisclaimerDialog(hWnd);
                 break;
             }
 
@@ -738,15 +738,15 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                 std::wstring destPath(dest);
 
                 if (sourcePath.empty() || destPath.empty()) {
-                    MessageBoxW(hWnd, L"Please select both source and destination folders.", L"ChronoSync Verification", MB_OK | MB_ICONWARNING);
+                    MessageBoxW(hWnd, L"Please select both source and destination folders.", L"PrevueSync Verification", MB_OK | MB_ICONWARNING);
                     break;
                 }
                 if (sourcePath == destPath) {
-                    MessageBoxW(hWnd, L"Source and destination folders cannot be the same.", L"ChronoSync Verification", MB_OK | MB_ICONWARNING);
+                    MessageBoxW(hWnd, L"Source and destination folders cannot be the same.", L"PrevueSync Verification", MB_OK | MB_ICONWARNING);
                     break;
                 }
 
-                ChronoSync::SyncOptions options = GetSyncOptionsFromUI();
+                PrevueSync::SyncOptions options = GetSyncOptionsFromUI();
 
                 SetControlsState(FALSE);
                 ClearOperationLog();
@@ -765,15 +765,15 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                 std::wstring destPath(dest);
 
                 if (sourcePath.empty() || destPath.empty()) {
-                    MessageBoxW(hWnd, L"Please select both source and destination folders.", L"ChronoSync Analyze", MB_OK | MB_ICONWARNING);
+                    MessageBoxW(hWnd, L"Please select both source and destination folders.", L"PrevueSync Analyze", MB_OK | MB_ICONWARNING);
                     break;
                 }
                 if (sourcePath == destPath) {
-                    MessageBoxW(hWnd, L"Source and destination folders cannot be the same.", L"ChronoSync Analyze", MB_OK | MB_ICONWARNING);
+                    MessageBoxW(hWnd, L"Source and destination folders cannot be the same.", L"PrevueSync Analyze", MB_OK | MB_ICONWARNING);
                     break;
                 }
 
-                ChronoSync::SyncOptions options = GetSyncOptionsFromUI();
+                PrevueSync::SyncOptions options = GetSyncOptionsFromUI();
                 SetControlsState(FALSE);
                 ClearOperationLog();
                 g_MsgRegistry.ResetForNewRun();
@@ -781,14 +781,14 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                 std::thread t(AnalyzeThreadProc, sourcePath, destPath, options);
                 t.detach();
             } else if (wmId == ID_ADD_QUEUE_BUTTON) {
-                ChronoSync::SyncJob job = BuildJobFromUI();
+                PrevueSync::SyncJob job = BuildJobFromUI();
                 if (job.source.empty() || job.destination.empty()) {
                     MessageBoxW(hWnd, L"Please select both source and destination folders before adding to the queue.",
-                                L"ChronoSync Queue", MB_OK | MB_ICONWARNING);
+                                L"PrevueSync Queue", MB_OK | MB_ICONWARNING);
                     break;
                 }
                 if (job.source == job.destination) {
-                    MessageBoxW(hWnd, L"Source and destination folders cannot be the same.", L"ChronoSync Queue", MB_OK | MB_ICONWARNING);
+                    MessageBoxW(hWnd, L"Source and destination folders cannot be the same.", L"PrevueSync Queue", MB_OK | MB_ICONWARNING);
                     break;
                 }
                 g_SyncJobQueue.push_back(std::move(job));
@@ -801,7 +801,7 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                     break;
                 }
                 if (g_SyncJobQueue.empty()) {
-                    MessageBoxW(hWnd, L"The sync queue is empty.", L"ChronoSync Queue", MB_OK | MB_ICONINFORMATION);
+                    MessageBoxW(hWnd, L"The sync queue is empty.", L"PrevueSync Queue", MB_OK | MB_ICONINFORMATION);
                     break;
                 }
                 SetControlsState(FALSE);
@@ -812,29 +812,29 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                 t.detach();
             } else if (wmId == ID_SAVE_QUEUE_BUTTON) {
                 if (g_SyncJobQueue.empty()) {
-                    MessageBoxW(hWnd, L"No jobs in the queue to save.", L"ChronoSync Queue", MB_OK | MB_ICONWARNING);
+                    MessageBoxW(hWnd, L"No jobs in the queue to save.", L"PrevueSync Queue", MB_OK | MB_ICONWARNING);
                     break;
                 }
                 std::wstring path = SaveQueueDialog(hWnd);
                 if (!path.empty()) {
                     std::wstring error;
-                    if (ChronoSync::SyncJobQueueIO::SaveToFile(g_SyncJobQueue, path, error)) {
-                        MessageBoxW(hWnd, L"Queue saved successfully.", L"ChronoSync Queue", MB_OK | MB_ICONINFORMATION);
+                    if (PrevueSync::SyncJobQueueIO::SaveToFile(g_SyncJobQueue, path, error)) {
+                        MessageBoxW(hWnd, L"Queue saved successfully.", L"PrevueSync Queue", MB_OK | MB_ICONINFORMATION);
                     } else {
-                        MessageBoxW(hWnd, (L"Failed to save queue: " + error).c_str(), L"ChronoSync Queue", MB_OK | MB_ICONERROR);
+                        MessageBoxW(hWnd, (L"Failed to save queue: " + error).c_str(), L"PrevueSync Queue", MB_OK | MB_ICONERROR);
                     }
                 }
             } else if (wmId == ID_LOAD_QUEUE_BUTTON) {
                 std::wstring path = OpenQueueDialog(hWnd);
                 if (!path.empty()) {
-                    std::vector<ChronoSync::SyncJob> loaded;
+                    std::vector<PrevueSync::SyncJob> loaded;
                     std::wstring error;
-                    if (ChronoSync::SyncJobQueueIO::LoadFromFile(path, loaded, error)) {
+                    if (PrevueSync::SyncJobQueueIO::LoadFromFile(path, loaded, error)) {
                         g_SyncJobQueue = std::move(loaded);
                         RefreshQueueListbox();
-                        MessageBoxW(hWnd, L"Queue loaded successfully.", L"ChronoSync Queue", MB_OK | MB_ICONINFORMATION);
+                        MessageBoxW(hWnd, L"Queue loaded successfully.", L"PrevueSync Queue", MB_OK | MB_ICONINFORMATION);
                     } else {
-                        MessageBoxW(hWnd, (L"Failed to load queue: " + error).c_str(), L"ChronoSync Queue", MB_OK | MB_ICONERROR);
+                        MessageBoxW(hWnd, (L"Failed to load queue: " + error).c_str(), L"PrevueSync Queue", MB_OK | MB_ICONERROR);
                     }
                 }
             } else if (wmId == ID_HISTORY_BUTTON) {
@@ -842,14 +842,14 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                 GetWindowTextW(g_hWndDestEdit, dest, MAX_PATH);
                 if (dest[0] == L'\0') {
                     MessageBoxW(hWnd, L"Select a destination folder to view sync history.",
-                                L"ChronoSync History", MB_OK | MB_ICONWARNING);
+                                L"PrevueSync History", MB_OK | MB_ICONWARNING);
                     break;
                 }
                 ShowHistoryWindow(hWnd, dest);
             } else if (wmId == ID_SCHEDULE_BUTTON) {
-                ChronoSync::SyncProfile profile = BuildProfileFromUI();
+                PrevueSync::SyncProfile profile = BuildProfileFromUI();
                 if (profile.source.empty() || profile.destination.empty()) {
-                    MessageBoxW(hWnd, L"Please configure source and destination before scheduling.", L"ChronoSync Schedule", MB_OK | MB_ICONWARNING);
+                    MessageBoxW(hWnd, L"Please configure source and destination before scheduling.", L"PrevueSync Schedule", MB_OK | MB_ICONWARNING);
                     break;
                 }
 
@@ -859,8 +859,8 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                 }
 
                 std::wstring saveError;
-                if (!ChronoSync::SyncProfileIO::SaveToFile(profile, profilePath, saveError)) {
-                    MessageBoxW(hWnd, (L"Failed to save profile for scheduling: " + saveError).c_str(), L"ChronoSync Schedule", MB_OK | MB_ICONERROR);
+                if (!PrevueSync::SyncProfileIO::SaveToFile(profile, profilePath, saveError)) {
+                    MessageBoxW(hWnd, (L"Failed to save profile for scheduling: " + saveError).c_str(), L"PrevueSync Schedule", MB_OK | MB_ICONERROR);
                     break;
                 }
 
@@ -872,11 +872,11 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
                 wchar_t exePath[MAX_PATH] = {};
                 GetModuleFileNameW(NULL, exePath, MAX_PATH);
-                std::wstring taskName = ChronoSync::TaskScheduler::SanitizeTaskName(profile.name);
+                std::wstring taskName = PrevueSync::TaskScheduler::SanitizeTaskName(profile.name);
                 std::wstring scheduleError;
                 bool scheduled = scheduleState.weekly
-                    ? ChronoSync::TaskScheduler::CreateWeeklyTask(taskName, exePath, profilePath, scheduleState.hour, scheduleState.minute, scheduleState.dayName, scheduleError)
-                    : ChronoSync::TaskScheduler::CreateDailyTask(taskName, exePath, profilePath, scheduleState.hour, scheduleState.minute, scheduleError);
+                    ? PrevueSync::TaskScheduler::CreateWeeklyTask(taskName, exePath, profilePath, scheduleState.hour, scheduleState.minute, scheduleState.dayName, scheduleError)
+                    : PrevueSync::TaskScheduler::CreateDailyTask(taskName, exePath, profilePath, scheduleState.hour, scheduleState.minute, scheduleError);
 
                 if (scheduled) {
                     wchar_t timeMsg[32] = {};
@@ -885,35 +885,35 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                     if (scheduleState.weekly) {
                         msg += L"\nDay: " + scheduleState.dayName;
                     }
-                    MessageBoxW(hWnd, msg.c_str(), L"ChronoSync Schedule", MB_OK | MB_ICONINFORMATION);
+                    MessageBoxW(hWnd, msg.c_str(), L"PrevueSync Schedule", MB_OK | MB_ICONINFORMATION);
                 } else {
-                    MessageBoxW(hWnd, (L"Failed to create scheduled task: " + scheduleError).c_str(), L"ChronoSync Schedule", MB_OK | MB_ICONERROR);
+                    MessageBoxW(hWnd, (L"Failed to create scheduled task: " + scheduleError).c_str(), L"PrevueSync Schedule", MB_OK | MB_ICONERROR);
                 }
             } else if (wmId == ID_SAVE_PROFILE_BUTTON) {
-                ChronoSync::SyncProfile profile = BuildProfileFromUI();
+                PrevueSync::SyncProfile profile = BuildProfileFromUI();
                 if (profile.source.empty() || profile.destination.empty()) {
-                    MessageBoxW(hWnd, L"Please select both source and destination folders before saving a profile.", L"ChronoSync Profile", MB_OK | MB_ICONWARNING);
+                    MessageBoxW(hWnd, L"Please select both source and destination folders before saving a profile.", L"PrevueSync Profile", MB_OK | MB_ICONWARNING);
                     break;
                 }
                 std::wstring path = SaveProfileDialog(hWnd);
                 if (!path.empty()) {
                     std::wstring error;
-                    if (ChronoSync::SyncProfileIO::SaveToFile(profile, path, error)) {
-                        MessageBoxW(hWnd, L"Profile saved successfully.", L"ChronoSync Profile", MB_OK | MB_ICONINFORMATION);
+                    if (PrevueSync::SyncProfileIO::SaveToFile(profile, path, error)) {
+                        MessageBoxW(hWnd, L"Profile saved successfully.", L"PrevueSync Profile", MB_OK | MB_ICONINFORMATION);
                     } else {
-                        MessageBoxW(hWnd, (L"Failed to save profile: " + error).c_str(), L"ChronoSync Profile", MB_OK | MB_ICONERROR);
+                        MessageBoxW(hWnd, (L"Failed to save profile: " + error).c_str(), L"PrevueSync Profile", MB_OK | MB_ICONERROR);
                     }
                 }
             } else if (wmId == ID_LOAD_PROFILE_BUTTON) {
                 std::wstring path = OpenProfileDialog(hWnd);
                 if (!path.empty()) {
-                    ChronoSync::SyncProfile profile;
+                    PrevueSync::SyncProfile profile;
                     std::wstring error;
-                    if (ChronoSync::SyncProfileIO::LoadFromFile(path, profile, error)) {
+                    if (PrevueSync::SyncProfileIO::LoadFromFile(path, profile, error)) {
                         ApplyProfileToUI(profile);
-                        MessageBoxW(hWnd, (L"Loaded profile: " + profile.name).c_str(), L"ChronoSync Profile", MB_OK | MB_ICONINFORMATION);
+                        MessageBoxW(hWnd, (L"Loaded profile: " + profile.name).c_str(), L"PrevueSync Profile", MB_OK | MB_ICONINFORMATION);
                     } else {
-                        MessageBoxW(hWnd, (L"Failed to load profile: " + error).c_str(), L"ChronoSync Profile", MB_OK | MB_ICONERROR);
+                        MessageBoxW(hWnd, (L"Failed to load profile: " + error).c_str(), L"PrevueSync Profile", MB_OK | MB_ICONERROR);
                     }
                 }
             } else if (wmId == ID_SYNC_BUTTON) {
@@ -929,15 +929,15 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                 std::wstring destPath(dest);
 
                 if (sourcePath.empty() || destPath.empty()) {
-                    MessageBoxW(hWnd, L"Please select both source and destination folders.", L"ChronoSync Verification", MB_OK | MB_ICONWARNING);
+                    MessageBoxW(hWnd, L"Please select both source and destination folders.", L"PrevueSync Verification", MB_OK | MB_ICONWARNING);
                     break;
                 }
                 if (sourcePath == destPath) {
-                    MessageBoxW(hWnd, L"Source and destination folders cannot be the same.", L"ChronoSync Verification", MB_OK | MB_ICONWARNING);
+                    MessageBoxW(hWnd, L"Source and destination folders cannot be the same.", L"PrevueSync Verification", MB_OK | MB_ICONWARNING);
                     break;
                 }
 
-                ChronoSync::SyncOptions options = GetSyncOptionsFromUI();
+                PrevueSync::SyncOptions options = GetSyncOptionsFromUI();
 
                 SetControlsState(FALSE);
                 ClearOperationLog();
@@ -1054,7 +1054,7 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             SendMessageW(g_hWndProgressBar, PBM_SETPOS, 0, 0);
             SetWindowTextW(g_hWndStatusLabel, L"Ready");
 
-            std::unique_ptr<ChronoSync::SyncStats> pStats((ChronoSync::SyncStats*)lParam);
+            std::unique_ptr<PrevueSync::SyncStats> pStats((PrevueSync::SyncStats*)lParam);
             if (pStats) {
                 std::wstringstream ss;
                 ss << L"Synchronization Completed successfully!\n\n"
@@ -1071,12 +1071,12 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                 GetWindowTextW(g_hWndDestEdit, dest, MAX_PATH);
                 if (pStats->itemsDeleted > 0) {
                     EnableWindow(g_hWndUndoBtn, TRUE);
-                    ss << L"\n\nNote: Pruned items were backed up under '.chrono_backups' (or '.chrono_trash'). Use 'Undo Pruning' to restore the latest backup.";
+                    ss << L"\n\nNote: Pruned items were backed up under '.prevue_backups' (or '.prevue_trash'). Use 'Undo Pruning' to restore the latest backup.";
                 } else {
                     UpdateUndoButtonState(dest);
                 }
 
-                MessageBoxW(hWnd, ss.str().c_str(), L"ChronoSync Run Summary", MB_OK | MB_ICONINFORMATION);
+                MessageBoxW(hWnd, ss.str().c_str(), L"PrevueSync Run Summary", MB_OK | MB_ICONINFORMATION);
             }
             break;
         }
@@ -1101,7 +1101,7 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             }
 
             if (launchBundle->pList->empty()) {
-                MessageBoxW(hWnd, L"No modifications needed. Folders are already in sync.", L"ChronoSync Preview", MB_OK | MB_ICONINFORMATION);
+                MessageBoxW(hWnd, L"No modifications needed. Folders are already in sync.", L"PrevueSync Preview", MB_OK | MB_ICONINFORMATION);
                 break;
             }
 
@@ -1110,7 +1110,7 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
             PreviewLaunchData* rawLaunch = launchBundle.release();
             HWND hwndPreview = CreateWindowExW(
-                0, L"ChronoSyncPreviewWindow", L"Sync Preview - ChronoSync",
+                0, L"PrevueSyncPreviewWindow", L"Sync Preview - PrevueSync",
                 WS_OVERLAPPEDWINDOW,
                 CW_USEDEFAULT, CW_USEDEFAULT, rect.right - rect.left, rect.bottom - rect.top,
                 hWnd, NULL, GetModuleHandleW(NULL), rawLaunch
@@ -1152,7 +1152,7 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             EnableWindow(g_hWndUndoBtn, FALSE);
             SetWindowTextW(g_hWndStatusLabel, L"Ready");
             SendMessageW(g_hWndProgressBar, PBM_SETPOS, 0, 0);
-            MessageBoxW(hWnd, L"Undo complete. Pruned items have been restored successfully.", L"ChronoSync Undo", MB_OK | MB_ICONINFORMATION);
+            MessageBoxW(hWnd, L"Undo complete. Pruned items have been restored successfully.", L"PrevueSync Undo", MB_OK | MB_ICONINFORMATION);
             break;
         }
         case WM_SYNC_QUEUE_COMPLETE: {
@@ -1167,13 +1167,13 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
             std::wstringstream ss;
             ss << L"Queue finished.\n\nJobs run: " << totalJobs << L"\nJobs with changes: " << completed;
-            MessageBoxW(hWnd, ss.str().c_str(), L"ChronoSync Queue", MB_OK | MB_ICONINFORMATION);
+            MessageBoxW(hWnd, ss.str().c_str(), L"PrevueSync Queue", MB_OK | MB_ICONINFORMATION);
             break;
         }
         case WM_CLOSE: {
             if (g_SyncRunning) {
                 int res = MessageBoxW(hWnd, L"An operation is currently in progress.\nAre you sure you want to close and abort the process?",
-                                      L"ChronoSync Warning", MB_YESNO | MB_ICONWARNING);
+                                      L"PrevueSync Warning", MB_YESNO | MB_ICONWARNING);
                 if (res != IDYES) {
                     return 0;
                 }
@@ -1206,7 +1206,7 @@ bool RegisterMainWindowClass(HINSTANCE hInstance) {
     wc.hInstance = hInstance;
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
     wc.hbrBackground = CreateSolidBrush(UiTheme::WindowBg);
-    wc.lpszClassName = L"ChronoSyncMainWindow";
+    wc.lpszClassName = L"PrevueSyncMainWindow";
     ApplyAppWindowIcons(wc, hInstance);
     return RegisterClassExW(&wc) != 0;
 }

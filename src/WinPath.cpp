@@ -2,7 +2,7 @@
 
 #include <stdexcept>
 
-namespace ChronoSync::WinPath {
+namespace PrevueSync::WinPath {
 
     bool IsExtended(const std::wstring& path) {
         return path.size() >= 4 && path[0] == L'\\' && path[1] == L'\\' && path[2] == L'?' && path[3] == L'\\';
@@ -76,4 +76,4 @@ namespace ChronoSync::WinPath {
         }
     }
 
-} // namespace ChronoSync::WinPath
+} // namespace PrevueSync::WinPath

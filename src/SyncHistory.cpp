@@ -10,7 +10,7 @@
 #include <unordered_map>
 #include <filesystem>
 
-namespace ChronoSync {
+namespace PrevueSync {
 
     static std::string WideToUTF8(const std::wstring& wstr) {
         if (wstr.empty()) {
@@ -176,7 +176,7 @@ namespace ChronoSync {
     }
 
     static std::filesystem::path HistoryRoot(const std::wstring& destination) {
-        return std::filesystem::path(destination) / L".chrono_history";
+        return std::filesystem::path(destination) / L".prevue_history";
     }
 
     static std::filesystem::path IndexPath(const std::wstring& destination) {
@@ -599,14 +599,14 @@ namespace ChronoSync {
 
     std::wstring SyncHistoryIO::FormatHistoryReport(const std::vector<SyncHistoryEntry>& entries, int daysFilter) {
         std::wstringstream out;
-        out << L"ChronoSync History\r\n";
+        out << L"PrevueSync History\r\n";
         out << L"=================\r\n\r\n";
         if (daysFilter > 0) {
             out << L"Showing runs from the last " << daysFilter << L" day(s).\r\n\r\n";
         }
         if (entries.empty()) {
             out << L"No sync history recorded yet.\r\n";
-            out << L"History is saved under .chrono_history after each sync.\r\n";
+            out << L"History is saved under .prevue_history after each sync.\r\n";
             return out.str();
         }
 
@@ -678,4 +678,4 @@ namespace ChronoSync {
         return out.str();
     }
 
-} // namespace ChronoSync
+} // namespace PrevueSync

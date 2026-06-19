@@ -5,6 +5,8 @@
 #include <thread>
 #include <chrono>
 #include <cassert>
+#include <vector>
+#include <algorithm>
 #include "SyncEngine.h"
 #include "PathFilter.h"
 #include "SyncOptions.h"
@@ -17,8 +19,8 @@
 namespace fs = std::filesystem;
 
 // Minimal callback structures for silent test validation
-ChronoSync::SyncCallbacks GetTestCallbacks() {
-    ChronoSync::SyncCallbacks cb;
+PrevueSync::SyncCallbacks GetTestCallbacks() {
+    PrevueSync::SyncCallbacks cb;
     cb.onLog = [](const std::wstring& msg, bool isError) {
         if (isError) {
             std::wcerr << L"[TEST ERROR] " << msg << std::endl;
@@ -27,8 +29,8 @@ ChronoSync::SyncCallbacks GetTestCallbacks() {
     return cb;
 }
 
-ChronoSync::SyncOptions MakeTestOptions(bool prune, const ChronoSync::FilterOptions& filters = {}) {
-    ChronoSync::SyncOptions opts;
+PrevueSync::SyncOptions MakeTestOptions(bool prune, const PrevueSync::FilterOptions& filters = {}) {
+    PrevueSync::SyncOptions opts;
     opts.prune = prune;
     opts.filters = filters;
     opts.versionedBackups = false;
@@ -77,22 +79,87 @@ bool CreateTestJunction(const fs::path& linkPath, const fs::path& targetPath) {
     return false;
 }
 
+static size_t CountRegularFiles(const fs::path& root) {
+    std::error_code ec;
+    if (!fs::exists(root, ec)) {
+        return 0;
+    }
+
+    size_t count = 0;
+    fs::path scanRoot = PrevueSync::WinPath::NormalizeRoot(root.wstring());
+    fs::recursive_directory_iterator it(scanRoot, fs::directory_options::skip_permission_denied, ec);
+    const fs::recursive_directory_iterator end;
+    for (; it != end; it.increment(ec)) {
+        if (ec) {
+            ec.clear();
+            continue;
+        }
+        if (it->is_regular_file(ec) && !ec) {
+            ++count;
+        }
+        ec.clear();
+    }
+    return count;
+}
+
+static void RemoveTestSandbox(const fs::path& sandbox) {
+    std::error_code ec;
+    if (!fs::exists(sandbox, ec)) {
+        return;
+    }
+
+    fs::path scanRoot = PrevueSync::WinPath::NormalizeRoot(sandbox.wstring());
+    std::vector<fs::path> reparsePoints;
+    {
+        fs::recursive_directory_iterator it(scanRoot, fs::directory_options::skip_permission_denied, ec);
+        const fs::recursive_directory_iterator end;
+        for (; it != end; it.increment(ec)) {
+            if (ec) {
+                ec.clear();
+                continue;
+            }
+            DWORD attrs = GetFileAttributesW(it->path().c_str());
+            if (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_REPARSE_POINT)) {
+                reparsePoints.push_back(it->path());
+            }
+        }
+    }
+
+    std::sort(reparsePoints.begin(), reparsePoints.end(),
+              [](const fs::path& a, const fs::path& b) {
+                  return a.wstring().size() > b.wstring().size();
+              });
+    for (const fs::path& linkPath : reparsePoints) {
+        RemoveDirectoryW(linkPath.c_str());
+        fs::remove(linkPath, ec);
+        ec.clear();
+    }
+
+    fs::remove_all(scanRoot, ec);
+    ec.clear();
+    fs::remove_all(sandbox, ec);
+}
+
 int main() {
     std::wcout << L"==============================================" << std::endl;
-    std::wcout << L"ChronoSync Automated Verification Test Suite" << std::endl;
+    std::wcout << L"PrevueSync Automated Verification Test Suite" << std::endl;
     std::wcout << L"==============================================" << std::endl;
 
-    ChronoSync::SyncOptions noFilters = MakeTestOptions(false);
+    PrevueSync::SyncOptions noFilters = MakeTestOptions(false);
 
-    fs::path sandbox = fs::current_path() / L"test_sandbox";
+    // Use a fresh temp sandbox; legacy ./test_sandbox may survive failed cleanups.
+    RemoveTestSandbox(fs::current_path() / L"test_sandbox");
+    fs::path sandbox = fs::temp_directory_path()
+        / (L"PrevueSyncTests_" + std::to_wstring(GetCurrentProcessId()) + L"_"
+           + std::to_wstring(GetTickCount64()));
     fs::path srcDir = sandbox / L"source";
     fs::path destDir = sandbox / L"destination";
 
     std::error_code ec;
-    // Clean sandbox from any previous failed runs
-    fs::remove_all(sandbox, ec);
+    RemoveTestSandbox(sandbox);
     fs::create_directories(srcDir, ec);
     fs::create_directories(destDir, ec);
+    assert(!ec && "Failed to create test sandbox directories.");
 
     std::wcout << L"[1/6] Creating mock directory tree..." << std::endl;
     
@@ -109,10 +176,11 @@ int main() {
     WriteTestFile(srcDir / L"folder1/file4.txt", "Initial file4 contents inside folder1");
     WriteTestFile(srcDir / L"folder2/nested/file5.txt", "Initial file5 contents inside nested folder");
     WriteTestFile(srcDir / L"folder2/nested/file6.txt", "Initial file6 contents inside nested folder");
+    assert(CountRegularFiles(srcDir) == 6 && "Test setup should create exactly 6 source files.");
 
     std::wcout << L"[2/6] Executing initial full synchronization..." << std::endl;
     auto callbacks = GetTestCallbacks();
-    ChronoSync::SyncStats initialStats = ChronoSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), noFilters, callbacks);
+    PrevueSync::SyncStats initialStats = PrevueSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), noFilters, callbacks);
 
     // Assert initial sync copied everything
     std::wcout << L"      Initial sync transferred " << initialStats.filesCopied << L" files." << std::endl;
@@ -149,7 +217,7 @@ int main() {
     WriteTestFile(destDir / L"folder1/abandoned_nested.txt", "Should be pruned nested");
 
     std::wcout << L"[4/6] Executing differential synchronization with pruning..." << std::endl;
-    ChronoSync::SyncStats diffStats = ChronoSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), MakeTestOptions(true), callbacks);
+    PrevueSync::SyncStats diffStats = PrevueSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), MakeTestOptions(true), callbacks);
 
     std::wcout << L"      Differential files copied: " << diffStats.filesCopied << std::endl;
     std::wcout << L"      Differential files skipped: " << diffStats.filesSkipped << std::endl;
@@ -193,7 +261,7 @@ int main() {
     assert(junctionCreated && "Failed to create source junction for test");
 
     // Run sync again to sync the junction
-    ChronoSync::SyncStats junctionStats = ChronoSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), MakeTestOptions(true), callbacks);
+    PrevueSync::SyncStats junctionStats = PrevueSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), MakeTestOptions(true), callbacks);
     std::wcout << L"      Junction sync completed. Created: " << junctionStats.dirsCreated << L" dirs/junctions, " << junctionStats.filesCopied << L" files." << std::endl;
 
     // Verify destination junction exists, is a reparse point, and points to the correct target
@@ -225,16 +293,16 @@ int main() {
     BOOL removeSrcOk = RemoveDirectoryW(srcJunction.c_str());
     assert(removeSrcOk && "Failed to remove source junction for pruning test");
 
-    ChronoSync::SyncStats pruneJunctionStats = ChronoSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), MakeTestOptions(true), callbacks);
+    PrevueSync::SyncStats pruneJunctionStats = PrevueSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), MakeTestOptions(true), callbacks);
     assert(pruneJunctionStats.itemsDeleted == 1 && "Pruning should delete the junction at destination");
     assert(!fs::exists(destJunction) && "Destination junction should be deleted");
 
-    std::wcout << L"[7/9] Verifying exclusion filters (.chrono_trash, .chrono_tmp)..." << std::endl;
+    std::wcout << L"[7/9] Verifying exclusion filters (.prevue_trash, .prevue_tmp)..." << std::endl;
     // Create excluded items at various depths in source
-    fs::path excludedTrashDir = srcDir / L"folder2/nested/.chrono_trash";
-    fs::path excludedTmpDir = srcDir / L"folder1/.chrono_tmp";
-    fs::path excludedTmpFile = srcDir / L"folder1/nested/file.chrono_tmp";
-    fs::path excludedTmpFile2 = srcDir / L"folder2/nested/.chrono_tmp";
+    fs::path excludedTrashDir = srcDir / L"folder2/nested/.prevue_trash";
+    fs::path excludedTmpDir = srcDir / L"folder1/.prevue_tmp";
+    fs::path excludedTmpFile = srcDir / L"folder1/nested/file.prevue_tmp";
+    fs::path excludedTmpFile2 = srcDir / L"folder2/nested/.prevue_tmp";
 
     fs::create_directories(excludedTrashDir);
     fs::create_directories(excludedTmpDir);
@@ -243,13 +311,13 @@ int main() {
     WriteTestFile(excludedTrashDir / L"trash_file.txt", "Trash file content");
 
     // Run sync again
-    ChronoSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), MakeTestOptions(true), callbacks);
+    PrevueSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), MakeTestOptions(true), callbacks);
 
     // Verify none of the excluded paths exist in destination
-    assert(!fs::exists(destDir / L"folder2/nested/.chrono_trash") && ".chrono_trash directory at depth should be excluded");
-    assert(!fs::exists(destDir / L"folder1/.chrono_tmp") && ".chrono_tmp directory at depth should be excluded");
-    assert(!fs::exists(destDir / L"folder1/nested/file.chrono_tmp") && "*.chrono_tmp file should be excluded");
-    assert(!fs::exists(destDir / L"folder2/nested/.chrono_tmp") && "*.chrono_tmp file/folder should be excluded");
+    assert(!fs::exists(destDir / L"folder2/nested/.prevue_trash") && ".prevue_trash directory at depth should be excluded");
+    assert(!fs::exists(destDir / L"folder1/.prevue_tmp") && ".prevue_tmp directory at depth should be excluded");
+    assert(!fs::exists(destDir / L"folder1/nested/file.prevue_tmp") && "*.prevue_tmp file should be excluded");
+    assert(!fs::exists(destDir / L"folder2/nested/.prevue_tmp") && "*.prevue_tmp file/folder should be excluded");
 
     std::wcout << L"[8/9] Verifying user exclude filters (*.pkl, node_modules, *.zip)..." << std::endl;
     WriteTestFile(srcDir / L"cache/data.pkl", "pickle payload");
@@ -257,8 +325,8 @@ int main() {
     WriteTestFile(srcDir / L"node_modules/pkg/index.js", "module payload");
     WriteTestFile(srcDir / L"allowed.txt", "allowed payload");
 
-    ChronoSync::SyncOptions defaultFilters = MakeTestOptions(false, ChronoSync::FilterOptions::Defaults());
-    ChronoSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), defaultFilters, callbacks);
+    PrevueSync::SyncOptions defaultFilters = MakeTestOptions(false, PrevueSync::FilterOptions::Defaults());
+    PrevueSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), defaultFilters, callbacks);
 
     assert(!fs::exists(destDir / L"cache/data.pkl") && "*.pkl files should be excluded");
     assert(!fs::exists(destDir / L"archive.zip") && "*.zip files should be excluded");
@@ -269,20 +337,20 @@ int main() {
     WriteTestFile(srcDir / L"build/obj/artifact.bin", "build artifact");
     WriteTestFile(srcDir / L"build/allowed.bin", "allowed in build");
 
-    ChronoSync::SyncOptions slashFilters = MakeTestOptions(false, ChronoSync::FilterOptions::FromSemicolonList(L"", L"build/obj"));
-    ChronoSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), slashFilters, callbacks);
+    PrevueSync::SyncOptions slashFilters = MakeTestOptions(false, PrevueSync::FilterOptions::FromSemicolonList(L"", L"build/obj"));
+    PrevueSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), slashFilters, callbacks);
     assert(!fs::exists(destDir / L"build/obj/artifact.bin") && "build/obj with forward slashes should be excluded");
     assert(fs::exists(destDir / L"build/allowed.bin") && "sibling paths under build/ should still sync");
 
     std::wcout << L"[10/11] Verifying trailing semicolon and empty-pattern guards..." << std::endl;
     WriteTestFile(srcDir / L"trailing_guard.txt", "should still sync");
 
-    ChronoSync::SyncOptions trailingFilters = MakeTestOptions(false, ChronoSync::FilterOptions::FromSemicolonList(L"", L"*.pkl;node_modules;"));
+    PrevueSync::SyncOptions trailingFilters = MakeTestOptions(false, PrevueSync::FilterOptions::FromSemicolonList(L"", L"*.pkl;node_modules;"));
     assert(trailingFilters.filters.excludePatterns.size() == 2 && "trailing semicolon must not create an empty pattern");
-    ChronoSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), trailingFilters, callbacks);
+    PrevueSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), trailingFilters, callbacks);
     assert(fs::exists(destDir / L"trailing_guard.txt") && "trailing semicolon must not exclude everything");
-    assert(!ChronoSync::PathFilter::GlobMatch(L"", L"anything") && "empty glob pattern must not match");
-    assert(!ChronoSync::PathFilter::MatchesPattern(L"", L"path", L"name", false) && "empty match pattern must not match");
+    assert(!PrevueSync::PathFilter::GlobMatch(L"", L"anything") && "empty glob pattern must not match");
+    assert(!PrevueSync::PathFilter::MatchesPattern(L"", L"path", L"name", false) && "empty match pattern must not match");
 
     std::wcout << L"[11/13] Verifying SHA256 compare mode..." << std::endl;
     WriteTestFile(srcDir / L"sha_test/equal_time.txt", "aaaaaaaaaaaaaaaaaaaa");
@@ -290,29 +358,29 @@ int main() {
     auto shaSrcTime = fs::last_write_time(srcDir / L"sha_test/equal_time.txt");
     fs::last_write_time(destDir / L"sha_test/equal_time.txt", shaSrcTime, ec);
 
-    ChronoSync::SyncOptions timestampOpts = MakeTestOptions(false);
-    ChronoSync::SyncStats tsStats = ChronoSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), timestampOpts, callbacks);
+    PrevueSync::SyncOptions timestampOpts = MakeTestOptions(false);
+    PrevueSync::SyncStats tsStats = PrevueSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), timestampOpts, callbacks);
     assert(tsStats.filesCopied == 0 && "timestamp mode should not copy equal-time same-size files");
     assert(fs::file_size(destDir / L"sha_test/equal_time.txt") == 20 && "timestamp mode should leave destination bytes unchanged");
 
-    ChronoSync::SyncOptions shaOpts = MakeTestOptions(false);
-    shaOpts.compareMode = ChronoSync::CompareMode::Sha256;
-    ChronoSync::SyncStats shaStats = ChronoSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), shaOpts, callbacks);
+    PrevueSync::SyncOptions shaOpts = MakeTestOptions(false);
+    shaOpts.compareMode = PrevueSync::CompareMode::Sha256;
+    PrevueSync::SyncStats shaStats = PrevueSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), shaOpts, callbacks);
     assert(shaStats.filesCopied == 1 && "SHA256 mode should copy when content differs");
 
     std::wcout << L"[12/13] Verifying versioned backup folders..." << std::endl;
     WriteTestFile(destDir / L"versioned_prune_me.txt", "old version");
-    ChronoSync::SyncOptions versionedPrune = MakeTestOptions(true);
+    PrevueSync::SyncOptions versionedPrune = MakeTestOptions(true);
     versionedPrune.versionedBackups = true;
     versionedPrune.maxBackupVersions = 3;
-    ChronoSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), versionedPrune, callbacks);
+    PrevueSync::SyncEngine::Sync(srcDir.wstring(), destDir.wstring(), versionedPrune, callbacks);
     assert(!fs::exists(destDir / L"versioned_prune_me.txt") && "pruned file should be removed from destination");
-    assert(fs::exists(destDir / L".chrono_backups") && "versioned backups root should exist");
+    assert(fs::exists(destDir / L".prevue_backups") && "versioned backups root should exist");
 
     std::wcout << L"[13/15] Verifying UNC path helpers..." << std::endl;
-    assert(ChronoSync::NetworkShare::IsUncPath(L"\\\\server\\share\\folder\\file.txt"));
-    assert(!ChronoSync::NetworkShare::IsUncPath(L"C:\\local\\path"));
-    assert(ChronoSync::NetworkShare::GetUncRoot(L"\\\\server\\share\\sub\\file.txt") == L"\\\\server\\share");
+    assert(PrevueSync::NetworkShare::IsUncPath(L"\\\\server\\share\\folder\\file.txt"));
+    assert(!PrevueSync::NetworkShare::IsUncPath(L"C:\\local\\path"));
+    assert(PrevueSync::NetworkShare::GetUncRoot(L"\\\\server\\share\\sub\\file.txt") == L"\\\\server\\share");
 
     std::wcout << L"[14/15] Verifying atomic block-compare copy..." << std::endl;
     fs::path deltaSrcDir = sandbox / L"delta_src";
@@ -330,9 +398,9 @@ int main() {
     std::string modified = blockA + std::string(blockSize, 'C') + blockA;
     WriteTestFile(deltaSrcDir / L"large.bin", modified);
 
-    ChronoSync::SyncOptions deltaOpts = MakeTestOptions(false);
+    PrevueSync::SyncOptions deltaOpts = MakeTestOptions(false);
     deltaOpts.deltaBlockCopy = true;
-    ChronoSync::SyncStats deltaStats = ChronoSync::SyncEngine::Sync(
+    PrevueSync::SyncStats deltaStats = PrevueSync::SyncEngine::Sync(
         deltaSrcDir.wstring(), deltaDestDir.wstring(), deltaOpts, callbacks);
     assert(deltaStats.filesCopied == 1 && "block-compare sync should copy one changed file");
     assert(deltaStats.deltaBytesWritten > 0 && deltaStats.deltaBytesWritten < deltaContent.size() &&
@@ -353,9 +421,9 @@ int main() {
     assert(CreateTestJunction(previewDestJunction, junctionTarget) && "Failed to create destination junction for preview test");
     WriteTestFile(replaceSrc / L"collision_path", "source file replaces junction");
 
-    ChronoSync::SyncOptions noPrune = MakeTestOptions(false);
-    std::vector<ChronoSync::PreviewItem> previewItems =
-        ChronoSync::SyncEngine::Preview(replaceSrc.wstring(), replaceDest.wstring(), noPrune, callbacks);
+    PrevueSync::SyncOptions noPrune = MakeTestOptions(false);
+    std::vector<PrevueSync::PreviewItem> previewItems =
+        PrevueSync::SyncEngine::Preview(replaceSrc.wstring(), replaceDest.wstring(), noPrune, callbacks);
 
     bool foundReplace = false;
     bool foundPrune = false;
@@ -371,13 +439,13 @@ int main() {
     assert(!foundPrune && "preview must not show prune deletes when prune is disabled");
 
     std::wcout << L"[16/19] Verifying plan analysis and risk scoring..." << std::endl;
-    auto analysisReport = ChronoSync::BuildSyncPlanReport(
+    auto analysisReport = PrevueSync::BuildSyncPlanReport(
         replaceSrc.wstring(), replaceDest.wstring(), noPrune, callbacks);
     assert(analysisReport.analysis.deletesReplace >= 1 && "analysis should count replacement deletions");
     assert(analysisReport.analysis.filesToCopyUpdate + analysisReport.analysis.filesToCopyNew >= 1);
-    assert(analysisReport.analysis.risk == ChronoSync::RiskLevel::Medium ||
-           analysisReport.analysis.risk == ChronoSync::RiskLevel::High);
-    std::wstring reportText = ChronoSync::FormatSyncPlanReport(analysisReport.analysis);
+    assert(analysisReport.analysis.risk == PrevueSync::RiskLevel::Medium ||
+           analysisReport.analysis.risk == PrevueSync::RiskLevel::High);
+    std::wstring reportText = PrevueSync::FormatSyncPlanReport(analysisReport.analysis);
     assert(reportText.find(L"Risk:") != std::wstring::npos);
     assert(reportText.find(L"collision_path") != std::wstring::npos &&
            "analysis report should name replacement paths");
@@ -387,34 +455,34 @@ int main() {
            analysisReport.analysis.extensionBreakdown.empty());
 
     std::wcout << L"[17/19] Verifying sync history and snapshots..." << std::endl;
-    ChronoSync::SyncStats historyStats = {};
+    PrevueSync::SyncStats historyStats = {};
     historyStats.filesCopied = 3;
     historyStats.totalBytesCopied = 4096;
     std::wstring historyError;
-    assert(ChronoSync::SyncHistoryIO::RecordRun(
+    assert(PrevueSync::SyncHistoryIO::RecordRun(
         srcDir.wstring(), destDir.wstring(), noFilters, historyStats, historyError));
     historyStats.filesCopied = 1;
     historyStats.itemsDeleted = 1;
-    assert(ChronoSync::SyncHistoryIO::RecordRun(
+    assert(PrevueSync::SyncHistoryIO::RecordRun(
         srcDir.wstring(), destDir.wstring(), noFilters, historyStats, historyError));
 
-    std::vector<ChronoSync::SyncHistoryEntry> historyEntries;
-    assert(ChronoSync::SyncHistoryIO::LoadEntries(destDir.wstring(), historyEntries, historyError));
+    std::vector<PrevueSync::SyncHistoryEntry> historyEntries;
+    assert(PrevueSync::SyncHistoryIO::LoadEntries(destDir.wstring(), historyEntries, historyError));
     assert(historyEntries.size() >= 2);
 
-    ChronoSync::DestinationSnapshot snapA;
-    ChronoSync::DestinationSnapshot snapB;
-    assert(ChronoSync::SyncHistoryIO::LoadSnapshot(
+    PrevueSync::DestinationSnapshot snapA;
+    PrevueSync::DestinationSnapshot snapB;
+    assert(PrevueSync::SyncHistoryIO::LoadSnapshot(
         destDir.wstring(), historyEntries[0].snapshotId, snapA, historyError));
-    assert(ChronoSync::SyncHistoryIO::LoadSnapshot(
+    assert(PrevueSync::SyncHistoryIO::LoadSnapshot(
         destDir.wstring(), historyEntries[1].snapshotId, snapB, historyError));
-    auto diff = ChronoSync::SyncHistoryIO::DiffSnapshots(snapA, snapB);
-    std::wstring diffReport = ChronoSync::SyncHistoryIO::FormatSnapshotDiffReport(
+    auto diff = PrevueSync::SyncHistoryIO::DiffSnapshots(snapA, snapB);
+    std::wstring diffReport = PrevueSync::SyncHistoryIO::FormatSnapshotDiffReport(
         diff, historyEntries[0].timestampUtc, historyEntries[1].timestampUtc);
     assert(diffReport.find(L"Added:") != std::wstring::npos);
 
     std::wcout << L"[18/19] Verifying history query window..." << std::endl;
-    auto recent = ChronoSync::SyncHistoryIO::QuerySinceDays(destDir.wstring(), 7);
+    auto recent = PrevueSync::SyncHistoryIO::QuerySinceDays(destDir.wstring(), 7);
     assert(recent.size() >= 2);
 
     std::wcout << L"[19/20] Verifying long path support..." << std::endl;
@@ -429,23 +497,23 @@ int main() {
     }
     longRel += L"leaf.txt";
     std::error_code longEc;
-    assert(ChronoSync::WinPath::CreateParentDirectories(longSrc.wstring(), longRel, longEc) && !longEc);
+    assert(PrevueSync::WinPath::CreateParentDirectories(longSrc.wstring(), longRel, longEc) && !longEc);
     {
-        std::ofstream out(ChronoSync::WinPath::Join(longSrc.wstring(), longRel).wstring(), std::ios::binary | std::ios::trunc);
+        std::ofstream out(PrevueSync::WinPath::Join(longSrc.wstring(), longRel).wstring(), std::ios::binary | std::ios::trunc);
         assert(out && "Failed to create long-path test file");
         out << "long path leaf";
     }
 
-    ChronoSync::SyncStats longStats = ChronoSync::SyncEngine::Sync(
+    PrevueSync::SyncStats longStats = PrevueSync::SyncEngine::Sync(
         longSrc.wstring(), longDest.wstring(), noFilters, callbacks);
     assert(longStats.filesCopied == 1 && "long path file should sync");
-    assert(fs::exists(ChronoSync::WinPath::Join(longDest.wstring(), longRel)) && "long path destination should exist");
+    assert(fs::exists(PrevueSync::WinPath::Join(longDest.wstring(), longRel)) && "long path destination should exist");
 
     std::wcout << L"[20/20] Cleaning up test sandbox..." << std::endl;
-    fs::remove_all(sandbox, ec);
+    RemoveTestSandbox(sandbox);
 
     std::wcout << L"\n==============================================" << std::endl;
-    std::wcout << L"   SUCCESS: All ChronoSync Tests Passed!      " << std::endl;
+    std::wcout << L"   SUCCESS: All PrevueSync Tests Passed!      " << std::endl;
     std::wcout << L"==============================================" << std::endl;
     return 0;
 }

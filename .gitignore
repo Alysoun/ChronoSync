@@ -1,6 +1,6 @@
 # Build Outputs
-ChronoSync.exe
-ChronoSyncTests.exe
+PrevueSync.exe
+PrevueSyncTests.exe
 *.ilk
 *.pdb
 

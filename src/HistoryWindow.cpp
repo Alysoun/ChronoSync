@@ -24,20 +24,20 @@ namespace {
 
     struct HistoryDialogState {
         std::wstring destination;
-        std::vector<ChronoSync::SyncHistoryEntry> entries;
+        std::vector<PrevueSync::SyncHistoryEntry> entries;
         std::vector<size_t> comparableIndices;
     };
 
-    static void UpdateSnapshotCompareUi(HWND hWnd, const std::vector<ChronoSync::SyncHistoryEntry>& entries,
+    static void UpdateSnapshotCompareUi(HWND hWnd, const std::vector<PrevueSync::SyncHistoryEntry>& entries,
                                       const std::vector<size_t>& comparableIndices) {
         HWND hwndNote = GetDlgItem(hWnd, ID_HISTORY_SNAPSHOT_NOTE);
         const size_t withSnapshot = comparableIndices.size();
         const size_t total = entries.size();
-        const size_t cap = ChronoSync::SyncHistoryIO::MaxSnapshotEntries;
+        const size_t cap = PrevueSync::SyncHistoryIO::MaxSnapshotEntries;
 
         std::wstring note;
         if (total == 0) {
-            note = L"Run history is saved under .chrono_history after each sync.";
+            note = L"Run history is saved under .prevue_history after each sync.";
         } else if (withSnapshot >= 2) {
             note = L"Compare uses per-file snapshots from runs where the destination had at most " +
                    std::to_wstring(cap) + L" items.";
@@ -121,7 +121,7 @@ namespace {
         }
     }
 
-    static void PopulateSnapshotCombos(HWND hWnd, const std::vector<ChronoSync::SyncHistoryEntry>& entries,
+    static void PopulateSnapshotCombos(HWND hWnd, const std::vector<PrevueSync::SyncHistoryEntry>& entries,
                                        std::vector<size_t>& comparableIndices) {
         HWND older = GetDlgItem(hWnd, ID_HISTORY_OLDER_COMBO);
         HWND newer = GetDlgItem(hWnd, ID_HISTORY_NEWER_COMBO);
@@ -166,9 +166,9 @@ namespace {
                 SetWindowTheme(hwndReport, L"Explorer", nullptr);
                 AttachReadOnlyEditCopySupport(hwndReport);
 
-                auto recent = ChronoSync::SyncHistoryIO::QuerySinceDays(state->destination, 7);
+                auto recent = PrevueSync::SyncHistoryIO::QuerySinceDays(state->destination, 7);
                 state->entries = recent;
-                std::wstring report = ChronoSync::SyncHistoryIO::FormatHistoryReport(recent, 7);
+                std::wstring report = PrevueSync::SyncHistoryIO::FormatHistoryReport(recent, 7);
                 SetWindowTextW(hwndReport, report.c_str());
 
                 CreateWindowExW(0, L"STATIC", L"",
@@ -190,8 +190,8 @@ namespace {
                                 350, 322, 220, 200, hWnd, (HMENU)(INT_PTR)ID_HISTORY_NEWER_COMBO, NULL, NULL);
 
                 std::wstring error;
-                std::vector<ChronoSync::SyncHistoryEntry> allEntries;
-                ChronoSync::SyncHistoryIO::LoadEntries(state->destination, allEntries, error);
+                std::vector<PrevueSync::SyncHistoryEntry> allEntries;
+                PrevueSync::SyncHistoryIO::LoadEntries(state->destination, allEntries, error);
                 if (allEntries.size() < 2) {
                     allEntries = state->entries;
                 }
@@ -236,11 +236,11 @@ namespace {
                         MessageBoxW(hWnd,
                                     (L"Compare needs two runs that saved full snapshots.\n\n"
                                      L"This destination has more than " +
-                                     std::to_wstring(ChronoSync::SyncHistoryIO::MaxSnapshotEntries) +
+                                     std::to_wstring(PrevueSync::SyncHistoryIO::MaxSnapshotEntries) +
                                      L" items, so recent runs are logged with stats only "
                                      L"(copies, skips, bytes, timing) but without per-file snapshot files.")
                                         .c_str(),
-                                    L"ChronoSync History", MB_OK | MB_ICONINFORMATION);
+                                    L"PrevueSync History", MB_OK | MB_ICONINFORMATION);
                         break;
                     }
 
@@ -251,11 +251,11 @@ namespace {
                     if (olderIdx < 0 || newerIdx < 0 ||
                         olderIdx >= static_cast<int>(state->comparableIndices.size()) ||
                         newerIdx >= static_cast<int>(state->comparableIndices.size())) {
-                        MessageBoxW(hWnd, L"Select two snapshots to compare.", L"ChronoSync History", MB_OK | MB_ICONINFORMATION);
+                        MessageBoxW(hWnd, L"Select two snapshots to compare.", L"PrevueSync History", MB_OK | MB_ICONINFORMATION);
                         break;
                     }
                     if (olderIdx == newerIdx) {
-                        MessageBoxW(hWnd, L"Choose two different snapshots.", L"ChronoSync History", MB_OK | MB_ICONWARNING);
+                        MessageBoxW(hWnd, L"Choose two different snapshots.", L"PrevueSync History", MB_OK | MB_ICONWARNING);
                         break;
                     }
                     if (olderIdx > newerIdx) {
@@ -265,16 +265,16 @@ namespace {
                     const auto& olderEntry = state->entries[state->comparableIndices[static_cast<size_t>(olderIdx)]];
                     const auto& newerEntry = state->entries[state->comparableIndices[static_cast<size_t>(newerIdx)]];
                     std::wstring error;
-                    ChronoSync::DestinationSnapshot olderSnap;
-                    ChronoSync::DestinationSnapshot newerSnap;
-                    if (!ChronoSync::SyncHistoryIO::LoadSnapshot(state->destination, olderEntry.snapshotId, olderSnap, error) ||
-                        !ChronoSync::SyncHistoryIO::LoadSnapshot(state->destination, newerEntry.snapshotId, newerSnap, error)) {
-                        MessageBoxW(hWnd, error.c_str(), L"ChronoSync History", MB_OK | MB_ICONERROR);
+                    PrevueSync::DestinationSnapshot olderSnap;
+                    PrevueSync::DestinationSnapshot newerSnap;
+                    if (!PrevueSync::SyncHistoryIO::LoadSnapshot(state->destination, olderEntry.snapshotId, olderSnap, error) ||
+                        !PrevueSync::SyncHistoryIO::LoadSnapshot(state->destination, newerEntry.snapshotId, newerSnap, error)) {
+                        MessageBoxW(hWnd, error.c_str(), L"PrevueSync History", MB_OK | MB_ICONERROR);
                         break;
                     }
 
-                    auto diff = ChronoSync::SyncHistoryIO::DiffSnapshots(olderSnap, newerSnap);
-                    std::wstring report = ChronoSync::SyncHistoryIO::FormatSnapshotDiffReport(
+                    auto diff = PrevueSync::SyncHistoryIO::DiffSnapshots(olderSnap, newerSnap);
+                    std::wstring report = PrevueSync::SyncHistoryIO::FormatSnapshotDiffReport(
                         diff, olderEntry.timestampUtc, newerEntry.timestampUtc);
                     ShowAnalysisWindow(hWnd, report);
                 }
@@ -317,7 +317,7 @@ namespace {
 
 bool ShowHistoryWindow(HWND parent, const std::wstring& destination) {
     if (destination.empty()) {
-        MessageBoxW(parent, L"Select a destination folder first.", L"ChronoSync History", MB_OK | MB_ICONWARNING);
+        MessageBoxW(parent, L"Select a destination folder first.", L"PrevueSync History", MB_OK | MB_ICONWARNING);
         return false;
     }
 
@@ -328,7 +328,7 @@ bool ShowHistoryWindow(HWND parent, const std::wstring& destination) {
         wc.hInstance = GetModuleHandleW(NULL);
         wc.hCursor = LoadCursor(NULL, IDC_ARROW);
         wc.hbrBackground = g_hbrBackground ? g_hbrBackground : reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
-        wc.lpszClassName = L"ChronoSyncHistoryWindow";
+        wc.lpszClassName = L"PrevueSyncHistoryWindow";
         RegisterClassExW(&wc);
         classRegistered = true;
     }
@@ -339,8 +339,8 @@ bool ShowHistoryWindow(HWND parent, const std::wstring& destination) {
     EnableWindow(parent, FALSE);
     HWND hwndDlg = CreateWindowExW(
         WS_EX_DLGMODALFRAME,
-        L"ChronoSyncHistoryWindow",
-        L"Sync History - ChronoSync",
+        L"PrevueSyncHistoryWindow",
+        L"Sync History - PrevueSync",
         WindowStyle::ResizableDialog,
         CW_USEDEFAULT, CW_USEDEFAULT, 620, 480,
         parent, NULL, GetModuleHandleW(NULL), state);

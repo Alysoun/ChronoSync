@@ -43,10 +43,10 @@ int g_logHeightBias = 80;
 
 WNDPROC g_logEditOrigProc = nullptr;
 
-ChronoSync::SyncPlanAnalysis g_CachedPlanAnalysis;
+PrevueSync::SyncPlanAnalysis g_CachedPlanAnalysis;
 bool g_HasCachedPlanAnalysis = false;
 
-std::vector<ChronoSync::SyncJob> g_SyncJobQueue;
+std::vector<PrevueSync::SyncJob> g_SyncJobQueue;
 
 HBRUSH g_hbrBackground = NULL;
 HBRUSH g_hbrEditBackground = NULL;
@@ -157,10 +157,10 @@ bool IsEditControl(HWND hwndCtrl) {
 
 void ApplyAppWindowIcons(WNDCLASSEXW& wc, HINSTANCE hInstance) {
     HICON hIcon = reinterpret_cast<HICON>(LoadImageW(
-        hInstance, MAKEINTRESOURCEW(IDI_CHRONOSYNC), IMAGE_ICON,
+        hInstance, MAKEINTRESOURCEW(IDI_PREVUESYNC), IMAGE_ICON,
         GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), LR_DEFAULTCOLOR));
     HICON hIconSm = reinterpret_cast<HICON>(LoadImageW(
-        hInstance, MAKEINTRESOURCEW(IDI_CHRONOSYNC), IMAGE_ICON,
+        hInstance, MAKEINTRESOURCEW(IDI_PREVUESYNC), IMAGE_ICON,
         GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_DEFAULTCOLOR));
     wc.hIcon = hIcon ? hIcon : LoadIconW(NULL, MAKEINTRESOURCEW(32512));
     wc.hIconSm = hIconSm ? hIconSm : wc.hIcon;

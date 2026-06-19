@@ -14,7 +14,7 @@
 #define IO_REPARSE_TAG_SYMLINK 0xA000000CL
 #endif
 
-namespace ChronoSync {
+namespace PrevueSync {
 
     static void ScanDirectoryHelper(const std::wstring& rootDir, const std::wstring& subDir,
                                     const FilterOptions& filters,
@@ -39,10 +39,10 @@ namespace ChronoSync {
                     continue;
                 }
 
-                if (name == L".chrono_trash" || name == L".chrono_backups" || name == L".chrono_history") {
+                if (name == L".prevue_trash" || name == L".prevue_backups" || name == L".prevue_history") {
                     continue;
                 }
-                if (name == L".chrono_tmp" || (name.size() >= 11 && name.compare(name.size() - 11, 11, L".chrono_tmp") == 0)) {
+                if (name == L".prevue_tmp" || (name.size() >= 11 && name.compare(name.size() - 11, 11, L".prevue_tmp") == 0)) {
                     continue;
                 }
 
@@ -198,11 +198,11 @@ namespace ChronoSync {
     bool SyncEngine::HasRestorableBackups(const std::wstring& destination) {
         std::filesystem::path destRoot(destination);
         std::error_code ec;
-        if (std::filesystem::exists(destRoot / L".chrono_trash", ec)) {
+        if (std::filesystem::exists(destRoot / L".prevue_trash", ec)) {
             return true;
         }
 
-        std::filesystem::path backupRoot = destRoot / L".chrono_backups";
+        std::filesystem::path backupRoot = destRoot / L".prevue_backups";
         if (!std::filesystem::exists(backupRoot, ec)) {
             return false;
         }
@@ -217,11 +217,11 @@ namespace ChronoSync {
 
     bool SyncEngine::UndoPruning(const std::wstring& destination, const SyncCallbacks& callbacks) {
         std::filesystem::path destRoot(destination);
-        std::filesystem::path backupRoot = destRoot / L".chrono_backups";
+        std::filesystem::path backupRoot = destRoot / L".prevue_backups";
         std::filesystem::path trashRoot = GetLatestBackupFolder(backupRoot);
 
         if (trashRoot.empty()) {
-            trashRoot = destRoot / L".chrono_trash";
+            trashRoot = destRoot / L".prevue_trash";
         }
 
         if (!std::filesystem::exists(trashRoot)) {
@@ -270,4 +270,4 @@ namespace ChronoSync {
         return true;
     }
 
-} // namespace ChronoSync
+} // namespace PrevueSync

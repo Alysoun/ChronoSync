@@ -90,7 +90,7 @@ bool RegisterAnalysisWindowClass(HINSTANCE hInstance) {
     wc.hInstance = hInstance;
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
     wc.hbrBackground = g_hbrBackground ? g_hbrBackground : reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
-    wc.lpszClassName = L"ChronoSyncAnalysisWindow";
+    wc.lpszClassName = L"PrevueSyncAnalysisWindow";
     if (!RegisterClassExW(&wc)) {
         return false;
     }
@@ -107,8 +107,8 @@ void ShowAnalysisWindow(HWND parent, const std::wstring& report) {
     auto* reportCopy = new std::wstring(report);
     HWND hwndAnalysis = CreateWindowExW(
         WS_EX_DLGMODALFRAME,
-        L"ChronoSyncAnalysisWindow",
-        L"Plan Analysis - ChronoSync",
+        L"PrevueSyncAnalysisWindow",
+        L"Plan Analysis - PrevueSync",
         WindowStyle::ResizableDialog,
         CW_USEDEFAULT, CW_USEDEFAULT, 640, 520,
         parent, NULL, hInstance, reportCopy);

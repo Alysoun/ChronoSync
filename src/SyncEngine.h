@@ -8,7 +8,7 @@
 #include "PathFilter.h"
 #include "SyncOptions.h"
 
-namespace ChronoSync {
+namespace PrevueSync {
 
     // Represents an item scanned in a directory
     struct SyncItem {
@@ -77,4 +77,4 @@ namespace ChronoSync {
         static bool HasRestorableBackups(const std::wstring& destination);
     };
 
-} // namespace ChronoSync
+} // namespace PrevueSync

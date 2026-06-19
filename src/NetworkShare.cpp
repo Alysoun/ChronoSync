@@ -5,7 +5,7 @@
 
 #pragma comment(lib, "mpr.lib")
 
-namespace ChronoSync {
+namespace PrevueSync {
 
     bool NetworkShare::IsUncPath(const std::wstring& path) {
         return path.size() >= 2 && path[0] == L'\\' && path[1] == L'\\';
@@ -89,4 +89,4 @@ namespace ChronoSync {
         }
     }
 
-} // namespace ChronoSync
+} // namespace PrevueSync

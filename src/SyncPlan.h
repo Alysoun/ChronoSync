@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace ChronoSync {
+namespace PrevueSync {
 
     enum class DeleteReason {
         Replace, // destination removed to resolve type/link mismatch (runs even when prune is off)
@@ -47,4 +47,4 @@ namespace ChronoSync {
     std::vector<PreviewItem> BuildPreviewList(const SyncPlan& plan,
                                               const std::unordered_map<std::wstring, SyncItem>& destMap);
 
-} // namespace ChronoSync
+} // namespace PrevueSync

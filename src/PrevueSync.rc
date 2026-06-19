@@ -1,0 +1,4 @@
+#include "resource.h"
+
+IDI_PREVUESYNC ICON "..\\icon\\prevuesync.ico"
+1 RT_MANIFEST "..\\PrevueSync.exe.manifest"

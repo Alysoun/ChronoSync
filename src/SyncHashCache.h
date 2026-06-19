@@ -7,7 +7,7 @@
 #include <string>
 #include <unordered_map>
 
-namespace ChronoSync {
+namespace PrevueSync {
 
     struct CachedFileHash {
         unsigned long long fileSize = 0;
@@ -39,4 +39,4 @@ namespace ChronoSync {
         static bool EntryMatches(const CachedFileHash& entry, const SyncItem& item);
     };
 
-} // namespace ChronoSync
+} // namespace PrevueSync

@@ -24,7 +24,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     (void)lpCmdLine;
 
     int cliExitCode = 0;
-    if (ChronoSync::CliRunner::TryRun(cliExitCode)) {
+    if (PrevueSync::CliRunner::TryRun(cliExitCode)) {
         return cliExitCode;
     }
 
@@ -52,8 +52,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     HWND hWnd = CreateWindowExW(
         0,
-        L"ChronoSyncMainWindow",
-        L"ChronoSync folder synchronizer",
+        L"PrevueSyncMainWindow",
+        L"PrevueSync folder synchronizer",
         WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT, CW_USEDEFAULT, rect.right - rect.left, rect.bottom - rect.top,
         NULL, NULL, hInstance, NULL

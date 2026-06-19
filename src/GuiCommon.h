@@ -111,8 +111,8 @@ void BeginSyncUiDrain();
 std::wstring TruncateForStatus(const std::wstring& text, size_t maxChars = 140);
 
 struct PreviewLaunchData {
-    std::vector<ChronoSync::PreviewItem>* pList = nullptr;
-    ChronoSync::SyncPlanAnalysis analysis;
+    std::vector<PrevueSync::PreviewItem>* pList = nullptr;
+    PrevueSync::SyncPlanAnalysis analysis;
     bool hasAnalysis = false;
     std::wstring sourceRoot;
     std::wstring destRoot;
@@ -120,7 +120,7 @@ struct PreviewLaunchData {
 
 struct AnalyzeCompleteData {
     std::wstring report;
-    ChronoSync::SyncPlanAnalysis analysis;
+    PrevueSync::SyncPlanAnalysis analysis;
     bool hasAnalysis = false;
 };
 
@@ -163,9 +163,9 @@ extern bool g_logFollowTail;
 extern int g_logHeightBias;
 extern WNDPROC g_logEditOrigProc;
 
-extern ChronoSync::SyncPlanAnalysis g_CachedPlanAnalysis;
+extern PrevueSync::SyncPlanAnalysis g_CachedPlanAnalysis;
 extern bool g_HasCachedPlanAnalysis;
-extern std::vector<ChronoSync::SyncJob> g_SyncJobQueue;
+extern std::vector<PrevueSync::SyncJob> g_SyncJobQueue;
 
 extern HBRUSH g_hbrBackground;
 extern HBRUSH g_hbrEditBackground;

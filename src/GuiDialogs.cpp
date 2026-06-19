@@ -94,12 +94,12 @@ std::wstring OpenProfileDialog(HWND hWndParent) {
                                   IID_IFileOpenDialog, reinterpret_cast<void**>(&pFileOpen));
     if (SUCCEEDED(hr)) {
         COMDLG_FILTERSPEC fileTypes[] = {
-            { L"ChronoSync Profiles (*.chronosync)", L"*.chronosync" },
+            { L"PrevueSync Profiles (*.prevuesync)", L"*.prevuesync" },
             { L"JSON Files (*.json)", L"*.json" },
             { L"All Files (*.*)", L"*.*" }
         };
         pFileOpen->SetFileTypes(3, fileTypes);
-        pFileOpen->SetDefaultExtension(L"chronosync");
+        pFileOpen->SetDefaultExtension(L"prevuesync");
         pFileOpen->SetTitle(L"Load Sync Profile");
         hr = pFileOpen->Show(hWndParent);
         if (SUCCEEDED(hr)) {
@@ -127,11 +127,11 @@ std::wstring SaveProfileDialog(HWND hWndParent) {
                                   IID_IFileSaveDialog, reinterpret_cast<void**>(&pFileSave));
     if (SUCCEEDED(hr)) {
         COMDLG_FILTERSPEC fileTypes[] = {
-            { L"ChronoSync Profiles (*.chronosync)", L"*.chronosync" },
+            { L"PrevueSync Profiles (*.prevuesync)", L"*.prevuesync" },
             { L"JSON Files (*.json)", L"*.json" }
         };
         pFileSave->SetFileTypes(2, fileTypes);
-        pFileSave->SetDefaultExtension(L"chronosync");
+        pFileSave->SetDefaultExtension(L"prevuesync");
         pFileSave->SetTitle(L"Save Sync Profile");
         hr = pFileSave->Show(hWndParent);
         if (SUCCEEDED(hr)) {
@@ -159,12 +159,12 @@ std::wstring OpenQueueDialog(HWND hWndParent) {
                                   IID_IFileOpenDialog, reinterpret_cast<void**>(&pFileOpen));
     if (SUCCEEDED(hr)) {
         COMDLG_FILTERSPEC fileTypes[] = {
-            { L"ChronoSync Queues (*.chronoqueue)", L"*.chronoqueue" },
+            { L"PrevueSync Queues (*.prevuequeue)", L"*.prevuequeue" },
             { L"JSON Files (*.json)", L"*.json" },
             { L"All Files (*.*)", L"*.*" }
         };
         pFileOpen->SetFileTypes(3, fileTypes);
-        pFileOpen->SetDefaultExtension(L"chronoqueue");
+        pFileOpen->SetDefaultExtension(L"prevuequeue");
         pFileOpen->SetTitle(L"Load Sync Queue");
         hr = pFileOpen->Show(hWndParent);
         if (SUCCEEDED(hr)) {
@@ -192,11 +192,11 @@ std::wstring SaveQueueDialog(HWND hWndParent) {
                                   IID_IFileSaveDialog, reinterpret_cast<void**>(&pFileSave));
     if (SUCCEEDED(hr)) {
         COMDLG_FILTERSPEC fileTypes[] = {
-            { L"ChronoSync Queues (*.chronoqueue)", L"*.chronoqueue" },
+            { L"PrevueSync Queues (*.prevuequeue)", L"*.prevuequeue" },
             { L"JSON Files (*.json)", L"*.json" }
         };
         pFileSave->SetFileTypes(2, fileTypes);
-        pFileSave->SetDefaultExtension(L"chronoqueue");
+        pFileSave->SetDefaultExtension(L"prevuequeue");
         pFileSave->SetTitle(L"Save Sync Queue");
         hr = pFileSave->Show(hWndParent);
         if (SUCCEEDED(hr)) {
@@ -258,7 +258,7 @@ bool RevealInExplorer(HWND owner, const std::wstring& fullPath) {
         revealPath = revealPath.parent_path();
         if (revealPath.empty() || !std::filesystem::exists(revealPath, ec)) {
             MessageBoxW(owner, (L"Path does not exist:\n" + fullPath).c_str(),
-                        L"ChronoSync", MB_OK | MB_ICONWARNING);
+                        L"PrevueSync", MB_OK | MB_ICONWARNING);
             return false;
         }
     }

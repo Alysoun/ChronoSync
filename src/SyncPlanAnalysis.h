@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace ChronoSync {
+namespace PrevueSync {
 
     enum class RiskLevel {
         Low,
@@ -70,4 +70,4 @@ namespace ChronoSync {
                                        const SyncOptions& options,
                                        const SyncCallbacks& callbacks);
 
-} // namespace ChronoSync
+} // namespace PrevueSync

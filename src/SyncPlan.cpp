@@ -10,7 +10,7 @@
 #define IO_REPARSE_TAG_MOUNT_POINT 0xA0000003L
 #endif
 
-namespace ChronoSync {
+namespace PrevueSync {
 
     bool FileContentsDiffer(const std::filesystem::path& srcPath,
                             const std::filesystem::path& destPath,
@@ -232,4 +232,4 @@ namespace ChronoSync {
         return previewList;
     }
 
-} // namespace ChronoSync
+} // namespace PrevueSync

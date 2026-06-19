@@ -3,7 +3,7 @@
 #include <windows.h>
 #include <string>
 
-namespace ChronoSync {
+namespace PrevueSync {
 
     constexpr int DisclaimerVersion = 3;
 
@@ -20,4 +20,4 @@ namespace ChronoSync {
 
     void PrintCliDisclaimer();
 
-} // namespace ChronoSync
+} // namespace PrevueSync

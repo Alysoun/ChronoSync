@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <cstring>
 
-namespace ChronoSync {
+namespace PrevueSync {
 
     static constexpr DWORD kBlockSize = 4 * 1024 * 1024;
 
@@ -16,7 +16,7 @@ namespace ChronoSync {
         DeltaCopyResult result;
         const std::wstring sourceOpen = WinPath::IsExtended(sourcePath) ? sourcePath : WinPath::ToExtended(sourcePath);
         const std::wstring destOpen = WinPath::IsExtended(destinationPath) ? destinationPath : WinPath::ToExtended(destinationPath);
-        std::wstring tempPath = destOpen + L".chrono_tmp";
+        std::wstring tempPath = destOpen + L".prevue_tmp";
 
         HANDLE hSource = CreateFileW(sourceOpen.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
                                      FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
@@ -132,4 +132,4 @@ namespace ChronoSync {
         return result;
     }
 
-} // namespace ChronoSync
+} // namespace PrevueSync

@@ -161,7 +161,7 @@ bool RunScheduleDialog(HWND parent, ScheduleDialogState& state) {
         wc.hInstance = GetModuleHandleW(NULL);
         wc.hCursor = LoadCursor(NULL, IDC_ARROW);
         wc.hbrBackground = g_hbrBackground ? g_hbrBackground : reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
-        wc.lpszClassName = L"ChronoSyncScheduleWindow";
+        wc.lpszClassName = L"PrevueSyncScheduleWindow";
         RegisterClassExW(&wc);
         classRegistered = true;
     }
@@ -169,7 +169,7 @@ bool RunScheduleDialog(HWND parent, ScheduleDialogState& state) {
     EnableWindow(parent, FALSE);
     HWND hwndDlg = CreateWindowExW(
         WS_EX_DLGMODALFRAME,
-        L"ChronoSyncScheduleWindow",
+        L"PrevueSyncScheduleWindow",
         L"Schedule Sync",
         WindowStyle::ResizableDialog,
         CW_USEDEFAULT, CW_USEDEFAULT, 380, 240,

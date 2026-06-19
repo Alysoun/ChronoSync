@@ -46,7 +46,7 @@ static void RebuildPreviewFilter(PreviewWindowContext* ctx) {
     if (ctx->lblSummary) {
         std::wstring summary;
         if (ctx->hasAnalysis) {
-            summary = L"Risk: " + ChronoSync::RiskLevelToString(ctx->analysis.risk)
+            summary = L"Risk: " + PrevueSync::RiskLevelToString(ctx->analysis.risk)
                     + L" | Transfer: " + std::to_wstring(ctx->analysis.filesToCopyNew + ctx->analysis.filesToCopyUpdate)
                     + L" file(s), "
                     + std::to_wstring(ctx->analysis.deletesPrune + ctx->analysis.deletesReplace)
@@ -63,7 +63,7 @@ static void RebuildPreviewFilter(PreviewWindowContext* ctx) {
     }
 }
 
-static std::wstring ResolvePreviewExplorerPath(const ChronoSync::PreviewItem& item,
+static std::wstring ResolvePreviewExplorerPath(const PrevueSync::PreviewItem& item,
                                                const std::wstring& sourceRoot,
                                                const std::wstring& destRoot) {
     const bool targetsDestination =
@@ -82,7 +82,7 @@ static std::wstring BuildPreviewClipboardText(PreviewWindowContext* ctx) {
         : std::vector<int>();
 
     std::wstring text = L"Relative Path\tPlanned Action\tSize\r\n";
-    auto appendRow = [&](const ChronoSync::PreviewItem& item) {
+    auto appendRow = [&](const PrevueSync::PreviewItem& item) {
         text += item.relativePath;
         text += L'\t';
         text += item.action;
@@ -404,7 +404,7 @@ bool RegisterPreviewWindowClass(HINSTANCE hInstance) {
     wcp.hInstance = hInstance;
     wcp.hCursor = LoadCursor(NULL, IDC_ARROW);
     wcp.hbrBackground = CreateSolidBrush(UiTheme::WindowBg);
-    wcp.lpszClassName = L"ChronoSyncPreviewWindow";
+    wcp.lpszClassName = L"PrevueSyncPreviewWindow";
     ApplyAppWindowIcons(wcp, hInstance);
     return RegisterClassExW(&wcp) != 0;
 }

@@ -11,7 +11,7 @@
 #include <vector>
 #include <string>
 
-namespace ChronoSync {
+namespace PrevueSync {
 
     static std::wstring GetExecutablePath() {
         wchar_t path[MAX_PATH] = {};
@@ -19,8 +19,8 @@ namespace ChronoSync {
         return path;
     }
 
-    static ChronoSync::SyncCallbacks GetCliCallbacks() {
-        ChronoSync::SyncCallbacks callbacks;
+    static PrevueSync::SyncCallbacks GetCliCallbacks() {
+        PrevueSync::SyncCallbacks callbacks;
         callbacks.onLog = [](const std::wstring& message, bool isError) {
             if (isError) {
                 std::wcerr << L"[ERROR] " << message << std::endl;
@@ -65,24 +65,24 @@ namespace ChronoSync {
         const auto callbacks = GetCliCallbacks();
 
         if (ArgEquals(args[1], L"--sync") && args.size() >= 3) {
-            ChronoSync::SyncProfile profile;
+            PrevueSync::SyncProfile profile;
             std::wstring error;
-            if (!ChronoSync::SyncProfileIO::LoadFromFile(args[2], profile, error)) {
+            if (!PrevueSync::SyncProfileIO::LoadFromFile(args[2], profile, error)) {
                 std::wcerr << L"Failed to load profile: " << error << std::endl;
                 exitCode = 1;
                 return true;
             }
 
             std::wstring networkError;
-            if (!ChronoSync::NetworkShare::EnsureAccessible(profile.source, networkError) ||
-                !ChronoSync::NetworkShare::EnsureAccessible(profile.destination, networkError)) {
+            if (!PrevueSync::NetworkShare::EnsureAccessible(profile.source, networkError) ||
+                !PrevueSync::NetworkShare::EnsureAccessible(profile.destination, networkError)) {
                 std::wcerr << networkError << std::endl;
                 exitCode = 1;
                 return true;
             }
 
-            ChronoSync::PrintCliDisclaimer();
-            ChronoSync::SyncStats stats = ChronoSync::SyncEngine::Sync(profile.source, profile.destination, profile.options, callbacks);
+            PrevueSync::PrintCliDisclaimer();
+            PrevueSync::SyncStats stats = PrevueSync::SyncEngine::Sync(profile.source, profile.destination, profile.options, callbacks);
             std::wcout << L"Sync complete. Files copied: " << stats.filesCopied
                        << L", skipped: " << stats.filesSkipped
                        << L", pruned: " << stats.itemsDeleted << std::endl;
@@ -91,25 +91,25 @@ namespace ChronoSync {
         }
 
         if (ArgEquals(args[1], L"--queue") && args.size() >= 3) {
-            std::vector<ChronoSync::SyncJob> jobs;
+            std::vector<PrevueSync::SyncJob> jobs;
             std::wstring error;
-            if (!ChronoSync::SyncJobQueueIO::LoadFromFile(args[2], jobs, error)) {
+            if (!PrevueSync::SyncJobQueueIO::LoadFromFile(args[2], jobs, error)) {
                 std::wcerr << L"Failed to load queue: " << error << std::endl;
                 exitCode = 1;
                 return true;
             }
 
-            ChronoSync::PrintCliDisclaimer();
+            PrevueSync::PrintCliDisclaimer();
             for (size_t i = 0; i < jobs.size(); ++i) {
                 std::wcout << L"=== Queue job " << (i + 1) << L"/" << jobs.size() << L": " << jobs[i].name << L" ===" << std::endl;
                 std::wstring networkError;
-                if (!ChronoSync::NetworkShare::EnsureAccessible(jobs[i].source, networkError) ||
-                    !ChronoSync::NetworkShare::EnsureAccessible(jobs[i].destination, networkError)) {
+                if (!PrevueSync::NetworkShare::EnsureAccessible(jobs[i].source, networkError) ||
+                    !PrevueSync::NetworkShare::EnsureAccessible(jobs[i].destination, networkError)) {
                     std::wcerr << networkError << std::endl;
                     exitCode = 1;
                     return true;
                 }
-                ChronoSync::SyncEngine::Sync(jobs[i].source, jobs[i].destination, jobs[i].options, callbacks);
+                PrevueSync::SyncEngine::Sync(jobs[i].source, jobs[i].destination, jobs[i].options, callbacks);
             }
 
             exitCode = 0;
@@ -122,7 +122,7 @@ namespace ChronoSync {
             std::wstring dayName = L"MON";
             int hour = 2;
             int minute = 0;
-            std::wstring taskName = L"ChronoSyncProfile";
+            std::wstring taskName = L"PrevueSyncProfile";
 
             for (size_t i = 3; i < args.size(); ++i) {
                 if (ArgEquals(args[i], L"--daily")) {
@@ -143,12 +143,12 @@ namespace ChronoSync {
                 }
             }
 
-            std::wstring sanitized = ChronoSync::TaskScheduler::SanitizeTaskName(taskName);
+            std::wstring sanitized = PrevueSync::TaskScheduler::SanitizeTaskName(taskName);
             std::wstring exePath = GetExecutablePath();
             std::wstring error;
             bool ok = weekly
-                ? ChronoSync::TaskScheduler::CreateWeeklyTask(sanitized, exePath, profilePath, hour, minute, dayName, error)
-                : ChronoSync::TaskScheduler::CreateDailyTask(sanitized, exePath, profilePath, hour, minute, error);
+                ? PrevueSync::TaskScheduler::CreateWeeklyTask(sanitized, exePath, profilePath, hour, minute, dayName, error)
+                : PrevueSync::TaskScheduler::CreateDailyTask(sanitized, exePath, profilePath, hour, minute, error);
 
             if (!ok) {
                 std::wcerr << error << std::endl;
@@ -162,7 +162,7 @@ namespace ChronoSync {
 
         if (ArgEquals(args[1], L"--schedule-remove") && args.size() >= 3) {
             std::wstring error;
-            if (!ChronoSync::TaskScheduler::RemoveTask(ChronoSync::TaskScheduler::SanitizeTaskName(args[2]), error)) {
+            if (!PrevueSync::TaskScheduler::RemoveTask(PrevueSync::TaskScheduler::SanitizeTaskName(args[2]), error)) {
                 std::wcerr << error << std::endl;
                 exitCode = 1;
             } else {
@@ -173,9 +173,9 @@ namespace ChronoSync {
         }
 
         if (ArgEquals(args[1], L"--help") || ArgEquals(args[1], L"-h") || ArgEquals(args[1], L"/?")) {
-            std::wcout << L"ChronoSync CLI\n"
-                       << L"  --sync <profile.chronosync>\n"
-                       << L"  --queue <queue.chronoqueue>\n"
+            std::wcout << L"PrevueSync CLI\n"
+                       << L"  --sync <profile.prevuesync>\n"
+                       << L"  --queue <queue.prevuequeue>\n"
                        << L"  --schedule-create <profile> [--daily|--weekly] [--day MON] [--time HH:MM] [--name TaskName]\n"
                        << L"  --schedule-remove <TaskName>\n";
             exitCode = 0;
@@ -185,4 +185,4 @@ namespace ChronoSync {
         return false;
     }
 
-} // namespace ChronoSync
+} // namespace PrevueSync

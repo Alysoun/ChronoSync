@@ -3,7 +3,7 @@
 #include <fstream>
 #include <sstream>
 
-namespace ChronoSync {
+namespace PrevueSync {
 
     static std::string WideToUTF8(const std::wstring& wstr) {
         if (wstr.empty()) {
@@ -313,4 +313,4 @@ namespace ChronoSync {
         return true;
     }
 
-} // namespace ChronoSync
+} // namespace PrevueSync

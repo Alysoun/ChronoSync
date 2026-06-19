@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-namespace ChronoSync {
+namespace PrevueSync {
 
     struct SnapshotFileEntry {
         std::wstring relativePath;
@@ -79,4 +79,4 @@ namespace ChronoSync {
                                                      const std::wstring& labelNewer);
     };
 
-} // namespace ChronoSync
+} // namespace PrevueSync

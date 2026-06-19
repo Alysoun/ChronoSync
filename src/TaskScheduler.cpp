@@ -4,7 +4,7 @@
 #include <vector>
 #include <algorithm>
 
-namespace ChronoSync {
+namespace PrevueSync {
 
     std::wstring TaskScheduler::SanitizeTaskName(const std::wstring& name) {
         std::wstring sanitized = name;
@@ -15,9 +15,9 @@ namespace ChronoSync {
             }
         }
         if (sanitized.empty()) {
-            sanitized = L"ChronoSyncTask";
+            sanitized = L"PrevueSyncTask";
         }
-        return L"ChronoSync\\" + sanitized;
+        return L"PrevueSync\\" + sanitized;
     }
 
     static bool RunSchTasks(const std::wstring& arguments, std::wstring& errorMessage) {
@@ -96,4 +96,4 @@ namespace ChronoSync {
         return RunSchTasks(args.str(), errorMessage);
     }
 
-} // namespace ChronoSync
+} // namespace PrevueSync

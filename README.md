@@ -1,28 +1,30 @@
-# ChronoSync
+# PrevueSync
+
+*Know your sync.*
 
 Native Windows folder synchronizer with differential sync, preview, pruning with undo, and a dark-themed GUI.
 
 **Design goal:** confidence before execution — know exactly what will happen before files are touched.
 
-**Disclaimer:** ChronoSync can overwrite or permanently delete files. You use this software at your own risk — see [Disclaimer](#disclaimer) below.
+**Disclaimer:** PrevueSync can overwrite or permanently delete files. You use this software at your own risk — see [Disclaimer](#disclaimer) below.
 
 ## Features
 
 - **Differential sync** — copies only new or changed files (timestamp or SHA256 comparison)
-- **Atomic block-compare copy** — for same-size files, compares 4MB blocks and rebuilds the destination atomically via `.chrono_tmp`; `deltaBytesWritten` counts only changed block data (unchanged blocks are copied from the existing destination into the temp file)
+- **Atomic block-compare copy** — for same-size files, compares 4MB blocks and rebuilds the destination atomically via `.prevue_tmp`; `deltaBytesWritten` counts only changed block data (unchanged blocks are copied from the existing destination into the temp file)
 - **SHA256 verification** — optional content-hash compare mode and verify-after-copy
-- **Atomic file replacement** — writes via `.chrono_tmp` then renames with `MOVEFILE_WRITE_THROUGH`
-- **Prune with undo** — removed files archived to `.chrono_backups/<timestamp>/` (or legacy `.chrono_trash`)
+- **Atomic file replacement** — writes via `.prevue_tmp` then renames with `MOVEFILE_WRITE_THROUGH`
+- **Prune with undo** — removed files archived to `.prevue_backups/<timestamp>/` (or legacy `.prevue_trash`)
 - **Versioned backups** — keeps the last N prune snapshots (default: 5)
-- **Multi-job queue** — queue multiple source→destination jobs, save/load `.chronoqueue` files, run sequentially
+- **Multi-job queue** — queue multiple source→destination jobs, save/load `.prevuequeue` files, run sequentially
 - **Scheduled syncs** — create daily/weekly Windows Task Scheduler jobs from the GUI or CLI
 - **Network share support** — UNC path detection, connection retry, and copy retries on transient errors
 - **Symlink & junction preservation** — reparse points are recreated at the destination
 - **Preview dialog** — virtual ListView with sort, search/filter, CSV export, and right-click **Show in File Explorer**
 - **Include/exclude filters** — glob patterns (default excludes: `*.pkl`, `node_modules`, `*.zip`)
-- **Sync profiles** — save/load source, destination, prune, filters, and compare options (`.chronosync` JSON)
+- **Sync profiles** — save/load source, destination, prune, filters, and compare options (`.prevuesync` JSON)
 - **Plan analysis** — **Analyze Plan** summarizes transfer size, largest files, category and extension breakdown, duration estimate, and LOW/MEDIUM/HIGH risk before syncing; preview shows risk headline
-- **Sync history** — each sync records run metadata and a destination snapshot under `.chrono_history`; **History...** shows recent activity and compares snapshots for `+ / - / ~` counts
+- **Sync history** — each sync records run metadata and a destination snapshot under `.prevue_history`; **History...** shows recent activity and compares snapshots for `+ / - / ~` counts
 
 ## Current capability
 
@@ -53,32 +55,32 @@ cmake -B build -G "Visual Studio 17 2022"
 cmake --build build --config Release
 ```
 
-Outputs: `ChronoSync.exe`, `ChronoSyncTests.exe`
+Outputs: `PrevueSync.exe`, `PrevueSyncTests.exe`
 
 ## Run tests
 
 ```bat
-ChronoSyncTests.exe
+PrevueSyncTests.exe
 ```
 
 ## CLI (headless)
 
-ChronoSync can run without the GUI for automation and scheduled tasks:
+PrevueSync can run without the GUI for automation and scheduled tasks:
 
 ```bat
-ChronoSync.exe --sync profile.chronosync
-ChronoSync.exe --queue jobs.chronoqueue
-ChronoSync.exe --schedule-create profile.chronosync --daily --time 02:00 --name NightlyBackup
-ChronoSync.exe --schedule-create profile.chronosync --weekly --day MON --time 03:30 --name WeeklyBackup
-ChronoSync.exe --schedule-remove NightlyBackup
-ChronoSync.exe --help
+PrevueSync.exe --sync profile.prevuesync
+PrevueSync.exe --queue jobs.prevuequeue
+PrevueSync.exe --schedule-create profile.prevuesync --daily --time 02:00 --name NightlyBackup
+PrevueSync.exe --schedule-create profile.prevuesync --weekly --day MON --time 03:30 --name WeeklyBackup
+PrevueSync.exe --schedule-remove NightlyBackup
+PrevueSync.exe --help
 ```
 
-Scheduled tasks invoke `ChronoSync.exe --sync <profile>` at the configured time.
+Scheduled tasks invoke `PrevueSync.exe --sync <profile>` at the configured time.
 
 ## Profile format
 
-Profiles are JSON files with extension `.chronosync`:
+Profiles are JSON files with extension `.prevuesync`:
 
 ```json
 {
@@ -97,15 +99,15 @@ Profiles are JSON files with extension `.chronosync`:
 }
 ```
 
-`deltaBlockCopy` enables atomic block-compare copy (see feature list above). The JSON key name is historical; the operation always rebuilds via `.chrono_tmp` rather than patching blocks in place.
+`deltaBlockCopy` enables atomic block-compare copy (see feature list above). The JSON key name is historical; the operation always rebuilds via `.prevue_tmp` rather than patching blocks in place.
 
 ## Queue format
 
-Job queues use `.chronoqueue` JSON files with a `jobs` array. Each job mirrors the profile fields above.
+Job queues use `.prevuequeue` JSON files with a `jobs` array. Each job mirrors the profile fields above.
 
 ## Roadmap
 
-ChronoSync already covers the usual sync-tool checklist (preview, filters, profiles, queues, scheduling, SHA verification, versioned backups, CLI, and more). The next differentiator is **visibility and confidence** — knowing exactly what will happen before files are touched.
+PrevueSync already covers the usual sync-tool checklist (preview, filters, profiles, queues, scheduling, SHA verification, versioned backups, CLI, and more). The next differentiator is **visibility and confidence** — knowing exactly what will happen before files are touched.
 
 ### Visibility & confidence (next focus)
 
@@ -115,7 +117,7 @@ ChronoSync already covers the usual sync-tool checklist (preview, filters, profi
 | High | **Sync impact summary** | Done — integrated into Analyze Plan and preview risk headline |
 | High | **Risk scoring** | Done — LOW/MEDIUM/HIGH with human-readable reasons |
 | Medium | **File-type analytics** | Done — category and top-extension breakdown in Analyze Plan |
-| Medium | **Historical change tracking** | Done — per-sync metadata log in `.chrono_history` with last-7-days summary |
+| Medium | **Historical change tracking** | Done — per-sync metadata log in `.prevue_history` with last-7-days summary |
 | Medium | **Snapshot diff viewer** | Done — compare two history snapshots for `+ / - / ~` counts in History dialog |
 
 ### Deep Windows integration (performance & reliability)
@@ -137,15 +139,15 @@ The highest-impact item here is **NTFS USN Journal scanning**. Today a large tre
 
 ### Design principle
 
-> **Know exactly what ChronoSync is about to do before you let it touch your files.**
+> **Know exactly what PrevueSync is about to do before you let it touch your files.**
 
-ChronoSync is not trying to be the fastest or most feature-dense sync tool. The bet is **confidence before execution** — preview, analyze, history, and backups so you can approve work before it runs.
+PrevueSync is not trying to be the fastest or most feature-dense sync tool. The bet is **confidence before execution** — preview, analyze, history, and backups so you can approve work before it runs.
 
 Speed still matters, but the standout differentiator is a smarter preview and plan analysis layer — not another copy-engine trick.
 
 ### Enterprise readiness (long-term)
 
-Enterprise adoption is not a single certification badge. It is a stack of requirements across **security**, **reliability**, **compliance**, and **operational maturity**. ChronoSync already has a safety-first architecture (atomic writes, preview/analyze, versioned backups, undo, SHA256, history, long-path support). The tracks below are what CTOs, CISOs, and compliance teams typically evaluate before deployment in finance, healthcare, government, or regulated SaaS environments.
+Enterprise adoption is not a single certification badge. It is a stack of requirements across **security**, **reliability**, **compliance**, and **operational maturity**. PrevueSync already has a safety-first architecture (atomic writes, preview/analyze, versioned backups, undo, SHA256, history, long-path support). The tracks below are what CTOs, CISOs, and compliance teams typically evaluate before deployment in finance, healthcare, government, or regulated SaaS environments.
 
 **Today:** suitable for power users and small teams with strong local observability.
 
@@ -153,14 +155,14 @@ Enterprise adoption is not a single certification badge. It is a stack of requir
 
 | Track | Status | Roadmap |
 |-------|--------|---------|
-| **Security hardening** | Partial | Code signing (EV ideal); signed/tamper-proof updates; static analysis + fuzzing; STRIDE / MITRE ATT&CK threat modeling; formal symlink/path-traversal/race reviews; secure temp-file policy (atomic `.chrono_tmp` already); no elevation-of-privilege paths; no plaintext secrets |
+| **Security hardening** | Partial | Code signing (EV ideal); signed/tamper-proof updates; static analysis + fuzzing; STRIDE / MITRE ATT&CK threat modeling; formal symlink/path-traversal/race reviews; secure temp-file policy (atomic `.prevue_tmp` already); no elevation-of-privilege paths; no plaintext secrets |
 | **Compliance alignment** | Not started | Organizational, not only code: documented processes, access controls, audit logs, incident response, vendor risk assessments, data retention. Map to frameworks customers require: SOC 2 Type II, ISO 27001, HIPAA, FedRAMP, GDPR, NIST 800-53 |
 | **Enterprise deployment** | Partial | MSI + silent install/uninstall; Group Policy; registry/JSON central config; portable mode; run without admin for normal sync; remote configuration; centralized log shipping |
 | **Scalability & stress testing** | Partial | Formal torture tests: millions of files, multi-TB trees, 24/7 soak (memory leaks); graceful degradation under network loss, disk full, locked files, permission errors, AV interference |
 | **Observability & monitoring** | Partial | Local logs/history exist; add Windows Event Log, syslog, SIEM-friendly JSON (Splunk/Sentinel/Elastic), optional SNMP, central dashboards |
 | **RBAC & policy** | Not started | Admin vs operator roles; lock dangerous options (e.g. prune) via policy; audit trail of who ran what, when, with which profile |
 | **Enterprise support** | Not started | SLAs, support contracts, onboarding, security questionnaires, pen-test reports, business continuity, liability coverage — business layer as much as engineering |
-| **Formal QA & release engineering** | Partial | `ChronoSyncTests.exe` + reproducible builds exist; add version pinning, release notes discipline, regression matrix, coverage targets, LTS branches |
+| **Formal QA & release engineering** | Partial | `PrevueSyncTests.exe` + reproducible builds exist; add version pinning, release notes discipline, regression matrix, coverage targets, LTS branches |
 | **Data integrity guarantees** | Strong base | Already: SHA256 compare/verify, atomic copy, delta copy, versioned backups, undo, snapshot history. Add: end-to-end integrity reports per run, optional signed/tamper-evident snapshot manifests |
 
 #### Suggested phasing
@@ -185,11 +187,11 @@ These are ahead of many commercial sync tools and do not need reinvention — on
 
 ## Disclaimer
 
-ChronoSync copies, overwrites, and may permanently delete files on your computer, especially when options such as **Prune destination** are enabled.
+PrevueSync copies, overwrites, and may permanently delete files on your computer, especially when options such as **Prune destination** are enabled.
 
-**YOU USE THIS SOFTWARE AT YOUR OWN RISK.** The authors and contributors of ChronoSync are not responsible for any lost, corrupted, overwritten, or deleted data, or for any other damage arising from your use of this software.
+**YOU USE THIS SOFTWARE AT YOUR OWN RISK.** The authors and contributors of PrevueSync are not responsible for any lost, corrupted, overwritten, or deleted data, or for any other damage arising from your use of this software.
 
-ChronoSync is designed to help prevent mistakes by providing **Preview**, **Analyze Plan**, **History**, and **Versioned Backups**.
+PrevueSync is designed to help prevent mistakes by providing **Preview**, **Analyze Plan**, **History**, and **Versioned Backups**.
 
 However, no software can guarantee protection from user error. Always maintain independent backups of important data.
 
@@ -200,13 +202,13 @@ You are solely responsible for:
 - Reviewing **Preview** and **Analyze Plan** before destructive operations
 - Understanding the sync options you enable
 
-By downloading, building, or running ChronoSync (GUI or CLI), you agree to these terms.
+By downloading, building, or running PrevueSync (GUI or CLI), you agree to these terms.
 
 The GUI shows the full disclaimer on first launch and provides a link to read it again. The CLI prints a notice when running `--sync` or `--queue`.
 
 ## License and ownership
 
-**ChronoSync is proprietary dual-licensed software. It is not MIT/GPL/open source.**
+**PrevueSync is proprietary dual-licensed software. It is not MIT/GPL/open source.**
 
 | Document | Purpose |
 |----------|---------|
@@ -230,8 +232,8 @@ The GUI shows the full disclaimer on first launch and provides a link to read it
 
 **License B** is required for commercial redistribution, resale, SaaS offerings, OEM bundling, and other commercial uses beyond License A.
 
-ChronoSync is currently held by the copyright holder personally. The copyright holder may **later assign or license** intellectual property to a wholly owned legal entity (e.g. an LLC) if and when they choose. That does not revoke your right to use a release you lawfully obtained under the terms published with that release.
+PrevueSync is currently held by the copyright holder personally. The copyright holder may **later assign or license** intellectual property to a wholly owned legal entity (e.g. an LLC) if and when they choose. That does not revoke your right to use a release you lawfully obtained under the terms published with that release.
 
 **Commercial licensing:** Rpracing00@gmail.com
 
-When you publish a GitHub Release, include `LICENSE` and `COPYRIGHT` in the zip alongside `ChronoSync.exe` and `README.md`.
+When you publish a GitHub Release, include `LICENSE` and `COPYRIGHT` in the zip alongside `PrevueSync.exe` and `README.md`.

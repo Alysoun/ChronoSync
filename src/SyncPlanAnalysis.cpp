@@ -8,7 +8,7 @@
 #define IO_REPARSE_TAG_MOUNT_POINT 0xA0000003L
 #endif
 
-namespace ChronoSync {
+namespace PrevueSync {
 
     static std::wstring DescribeSyncItemKind(const SyncItem& item) {
         if (item.isReparsePoint) {
@@ -250,7 +250,7 @@ namespace ChronoSync {
                                       const std::wstring& sourceLabel,
                                       const std::wstring& destLabel) {
         std::wstringstream out;
-        out << L"ChronoSync Plan Analysis\r\n";
+        out << L"PrevueSync Plan Analysis\r\n";
         out << L"========================\r\n\r\n";
 
         if (!sourceLabel.empty() || !destLabel.empty()) {
@@ -374,4 +374,4 @@ namespace ChronoSync {
         return report;
     }
 
-} // namespace ChronoSync
+} // namespace PrevueSync

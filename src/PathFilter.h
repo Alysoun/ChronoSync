@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-namespace ChronoSync {
+namespace PrevueSync {
 
     // Glob-style path filter rules applied during directory scans.
     struct FilterOptions {
@@ -25,4 +25,4 @@ namespace ChronoSync {
         static std::vector<std::wstring> ParseSemicolonList(const std::wstring& list);
     };
 
-} // namespace ChronoSync
+} // namespace PrevueSync

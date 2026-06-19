@@ -5,7 +5,7 @@
 #include <functional>
 #include <string>
 
-namespace ChronoSync {
+namespace PrevueSync {
 
     struct Sha256Progress {
         std::function<void(unsigned long long bytesHashed, unsigned long long fileSize)> onProgress;
@@ -40,4 +40,4 @@ namespace ChronoSync {
         static std::wstring ToHex(const std::array<uint8_t, 32>& hash);
     };
 
-} // namespace ChronoSync
+} // namespace PrevueSync

@@ -1,3 +1,3 @@
 #pragma once
 
-#define IDI_CHRONOSYNC 1
+#define IDI_PREVUESYNC 1

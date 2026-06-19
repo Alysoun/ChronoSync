@@ -3,7 +3,7 @@
 #include "PathFilter.h"
 #include <cstddef>
 
-namespace ChronoSync {
+namespace PrevueSync {
 
     enum class CompareMode {
         Timestamp = 0,
@@ -20,4 +20,4 @@ namespace ChronoSync {
         bool deltaBlockCopy = false;
     };
 
-} // namespace ChronoSync
+} // namespace PrevueSync

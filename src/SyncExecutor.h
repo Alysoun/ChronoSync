@@ -5,7 +5,7 @@
 #include "SyncPlan.h"
 #include <filesystem>
 
-namespace ChronoSync {
+namespace PrevueSync {
 
     void ExecuteSyncPlan(const std::filesystem::path& srcRoot,
                          const std::filesystem::path& destRoot,
@@ -15,4 +15,4 @@ namespace ChronoSync {
                          const SyncCallbacks& callbacks,
                          SyncStats& stats);
 
-} // namespace ChronoSync
+} // namespace PrevueSync

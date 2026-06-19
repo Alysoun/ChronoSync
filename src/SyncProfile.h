@@ -3,7 +3,7 @@
 #include "SyncOptions.h"
 #include <string>
 
-namespace ChronoSync {
+namespace PrevueSync {
 
     struct SyncProfile {
         std::wstring name;
@@ -18,4 +18,4 @@ namespace ChronoSync {
         static bool LoadFromFile(const std::wstring& filePath, SyncProfile& profile, std::wstring& errorMessage);
     };
 
-} // namespace ChronoSync
+} // namespace PrevueSync

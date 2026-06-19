@@ -3,7 +3,7 @@
 #include <fstream>
 #include <sstream>
 
-namespace ChronoSync {
+namespace PrevueSync {
 
     static std::string WideToUTF8(const std::wstring& wstr) {
         if (wstr.empty()) {
@@ -94,7 +94,7 @@ namespace ChronoSync {
     }
 
     std::filesystem::path SyncHashCache::CachePath(const std::filesystem::path& destinationRoot) {
-        return destinationRoot / L".chrono_history" / L"hash_cache.json";
+        return destinationRoot / L".prevue_history" / L"hash_cache.json";
     }
 
     bool SyncHashCache::EntryMatches(const CachedFileHash& entry, const SyncItem& item) {
@@ -301,4 +301,4 @@ namespace ChronoSync {
         dirty_ = true;
     }
 
-} // namespace ChronoSync
+} // namespace PrevueSync

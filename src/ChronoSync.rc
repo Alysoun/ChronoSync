@@ -1,4 +1,0 @@
-#include "resource.h"
-
-IDI_CHRONOSYNC ICON "..\\icon\\chronosync.ico"
-1 RT_MANIFEST "..\\ChronoSync.exe.manifest"

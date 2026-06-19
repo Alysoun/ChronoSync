@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-namespace ChronoSync {
+namespace PrevueSync {
 
     struct SyncJob {
         std::wstring name;
@@ -19,4 +19,4 @@ namespace ChronoSync {
         static bool LoadFromFile(const std::wstring& filePath, std::vector<SyncJob>& jobs, std::wstring& errorMessage);
     };
 
-} // namespace ChronoSync
+} // namespace PrevueSync

@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <vector>
 
-namespace ChronoSync {
+namespace PrevueSync {
 
     std::wstring MakeBackupTimestamp() {
         SYSTEMTIME st;
@@ -89,4 +89,4 @@ namespace ChronoSync {
         return FileHash::HashesEqual(srcHash, destHash);
     }
 
-} // namespace ChronoSync
+} // namespace PrevueSync

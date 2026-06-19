@@ -2,7 +2,7 @@
 
 #include <string>
 
-namespace ChronoSync {
+namespace PrevueSync {
 
     class TaskScheduler {
     public:
@@ -23,4 +23,4 @@ namespace ChronoSync {
         static bool RemoveTask(const std::wstring& taskName, std::wstring& errorMessage);
     };
 
-} // namespace ChronoSync
+} // namespace PrevueSync

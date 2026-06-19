@@ -1,6 +1,6 @@
 #pragma once
 
-namespace ChronoSync {
+namespace PrevueSync {
 
     class CliRunner {
     public:
@@ -8,4 +8,4 @@ namespace ChronoSync {
         static bool TryRun(int& exitCode);
     };
 
-} // namespace ChronoSync
+} // namespace PrevueSync

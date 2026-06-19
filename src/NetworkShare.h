@@ -3,7 +3,7 @@
 #include <windows.h>
 #include <string>
 
-namespace ChronoSync {
+namespace PrevueSync {
 
     class NetworkShare {
     public:
@@ -14,4 +14,4 @@ namespace ChronoSync {
         static bool IsRetryableNetworkError(DWORD errorCode);
     };
 
-} // namespace ChronoSync
+} // namespace PrevueSync

@@ -4,7 +4,7 @@
 #include <string>
 #include <system_error>
 
-namespace ChronoSync::WinPath {
+namespace PrevueSync::WinPath {
 
     bool IsExtended(const std::wstring& path);
 
@@ -24,4 +24,4 @@ namespace ChronoSync::WinPath {
                                  const std::wstring& relativePath,
                                  std::error_code& ec);
 
-} // namespace ChronoSync::WinPath
+} // namespace PrevueSync::WinPath

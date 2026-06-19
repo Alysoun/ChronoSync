@@ -8,7 +8,7 @@ namespace {
 constexpr size_t kVerboseCopyLogLimit = 200;
 constexpr size_t kCopyMilestoneInterval = 500;
 
-static void AttachHashProgress(ChronoSync::SyncCallbacks& callbacks) {
+static void AttachHashProgress(PrevueSync::SyncCallbacks& callbacks) {
     callbacks.onHashProgress = [](const std::wstring& relPath, unsigned long long bytesHashed,
                                 unsigned long long fileSize, bool hashingSource) {
         int pct = fileSize > 0 ? static_cast<int>((bytesHashed * 100) / fileSize) : 0;
@@ -21,7 +21,7 @@ static void AttachHashProgress(ChronoSync::SyncCallbacks& callbacks) {
     };
 }
 
-static void AttachPlanCallbacks(ChronoSync::SyncCallbacks& callbacks, ChronoSync::SyncOptions options,
+static void AttachPlanCallbacks(PrevueSync::SyncCallbacks& callbacks, PrevueSync::SyncOptions options,
                                 const wchar_t* compareStatus, const wchar_t* defaultCompareStatus) {
     callbacks.onScanStart = [](const std::wstring& rootDir) {
         g_MsgRegistry.SetStatus(L"Scanning: " + TruncateForStatus(rootDir, 200));
@@ -30,7 +30,7 @@ static void AttachPlanCallbacks(ChronoSync::SyncCallbacks& callbacks, ChronoSync
         g_MsgRegistry.PushLog(L"Scan complete. Found " + std::to_wstring(totalItems) + L" items.");
     };
     callbacks.onCompareStart = [options, compareStatus, defaultCompareStatus]() {
-        if (options.compareMode == ChronoSync::CompareMode::Sha256) {
+        if (options.compareMode == PrevueSync::CompareMode::Sha256) {
             g_MsgRegistry.SetStatus(compareStatus);
         } else {
             g_MsgRegistry.SetStatus(defaultCompareStatus);
@@ -48,7 +48,7 @@ static void AttachPlanCallbacks(ChronoSync::SyncCallbacks& callbacks, ChronoSync
     };
 }
 
-static void AttachCopyCallbacks(ChronoSync::SyncCallbacks& callbacks) {
+static void AttachCopyCallbacks(PrevueSync::SyncCallbacks& callbacks) {
     callbacks.onCopyStart = [](const std::wstring& relPath, unsigned long long fileSizeBytes,
                                size_t fileIndex, size_t totalFiles) {
         std::wstring shortPath = TruncateForStatus(relPath);
@@ -117,17 +117,17 @@ void SetControlsState(BOOL enabled) {
     }
 }
 
-void PreviewThreadProc(std::wstring src, std::wstring dest, ChronoSync::SyncOptions options) {
-    ChronoSync::SyncCallbacks callbacks;
+void PreviewThreadProc(std::wstring src, std::wstring dest, PrevueSync::SyncOptions options) {
+    PrevueSync::SyncCallbacks callbacks;
     AttachHashProgress(callbacks);
     AttachPlanCallbacks(callbacks, options,
                         L"SHA256 compare: hashing files (updates every 8 MB per file)...",
                         L"Comparing structures for preview...");
 
-    auto report = ChronoSync::BuildSyncPlanReport(src, dest, options, callbacks);
+    auto report = PrevueSync::BuildSyncPlanReport(src, dest, options, callbacks);
 
     auto* launchBundle = new PreviewLaunchData();
-    launchBundle->pList = new std::vector<ChronoSync::PreviewItem>(std::move(report.previewItems));
+    launchBundle->pList = new std::vector<PrevueSync::PreviewItem>(std::move(report.previewItems));
     launchBundle->analysis = std::move(report.analysis);
     launchBundle->hasAnalysis = true;
     launchBundle->sourceRoot = src;
@@ -135,23 +135,23 @@ void PreviewThreadProc(std::wstring src, std::wstring dest, ChronoSync::SyncOpti
     PostMessageW(g_hWndMain, WM_SYNC_PREVIEW_COMPLETE, 0, (LPARAM)launchBundle);
 }
 
-void AnalyzeThreadProc(std::wstring src, std::wstring dest, ChronoSync::SyncOptions options) {
-    ChronoSync::SyncCallbacks callbacks;
+void AnalyzeThreadProc(std::wstring src, std::wstring dest, PrevueSync::SyncOptions options) {
+    PrevueSync::SyncCallbacks callbacks;
     AttachHashProgress(callbacks);
     AttachPlanCallbacks(callbacks, options,
                         L"SHA256 compare: hashing files (updates every 8 MB per file)...",
                         L"Analyzing planned sync impact...");
 
-    auto report = ChronoSync::BuildSyncPlanReport(src, dest, options, callbacks);
+    auto report = PrevueSync::BuildSyncPlanReport(src, dest, options, callbacks);
     auto* data = new AnalyzeCompleteData();
     data->analysis = std::move(report.analysis);
     data->hasAnalysis = true;
-    data->report = ChronoSync::FormatSyncPlanReport(data->analysis, src, dest);
+    data->report = PrevueSync::FormatSyncPlanReport(data->analysis, src, dest);
     PostMessageW(g_hWndMain, WM_SYNC_ANALYZE_COMPLETE, 0, (LPARAM)data);
 }
 
-void SyncThreadProc(std::wstring src, std::wstring dest, ChronoSync::SyncOptions options) {
-    ChronoSync::SyncCallbacks callbacks;
+void SyncThreadProc(std::wstring src, std::wstring dest, PrevueSync::SyncOptions options) {
+    PrevueSync::SyncCallbacks callbacks;
     AttachHashProgress(callbacks);
     AttachPlanCallbacks(callbacks, options,
                         L"SHA256 compare: hashing files (updates every 8 MB per file)...",
@@ -162,9 +162,9 @@ void SyncThreadProc(std::wstring src, std::wstring dest, ChronoSync::SyncOptions
         (void)subDir;
     };
 
-    auto* pStats = new ChronoSync::SyncStats();
+    auto* pStats = new PrevueSync::SyncStats();
     try {
-        *pStats = ChronoSync::SyncEngine::Sync(src, dest, options, callbacks);
+        *pStats = PrevueSync::SyncEngine::Sync(src, dest, options, callbacks);
     } catch (const std::exception& ex) {
         std::string err = ex.what() ? ex.what() : "unknown error";
         g_MsgRegistry.PushLog(L"[ERROR] Sync failed: " + std::wstring(err.begin(), err.end()));
@@ -175,10 +175,10 @@ void SyncThreadProc(std::wstring src, std::wstring dest, ChronoSync::SyncOptions
     PostMessageW(g_hWndMain, WM_SYNC_COMPLETE, 1, (LPARAM)pStats);
 }
 
-void QueueThreadProc(std::vector<ChronoSync::SyncJob> jobs) {
-    ChronoSync::SyncCallbacks callbacks;
+void QueueThreadProc(std::vector<PrevueSync::SyncJob> jobs) {
+    PrevueSync::SyncCallbacks callbacks;
     AttachHashProgress(callbacks);
-    AttachPlanCallbacks(callbacks, ChronoSync::SyncOptions{},
+    AttachPlanCallbacks(callbacks, PrevueSync::SyncOptions{},
                         L"SHA256 compare: hashing files (updates every 8 MB per file)...",
                         L"Comparing directory structures...");
     AttachCopyCallbacks(callbacks);
@@ -187,7 +187,7 @@ void QueueThreadProc(std::vector<ChronoSync::SyncJob> jobs) {
     for (size_t i = 0; i < jobs.size(); ++i) {
         g_MsgRegistry.PushLog(L"=== Queue job " + std::to_wstring(i + 1) + L"/" + std::to_wstring(jobs.size()) +
                               L": " + jobs[i].name + L" ===");
-        ChronoSync::SyncStats stats = ChronoSync::SyncEngine::Sync(jobs[i].source, jobs[i].destination, jobs[i].options, callbacks);
+        PrevueSync::SyncStats stats = PrevueSync::SyncEngine::Sync(jobs[i].source, jobs[i].destination, jobs[i].options, callbacks);
         if (stats.filesCopied > 0 || stats.itemsDeleted > 0 || stats.dirsCreated > 0) {
             completedJobs++;
         }
@@ -198,7 +198,7 @@ void QueueThreadProc(std::vector<ChronoSync::SyncJob> jobs) {
 }
 
 void UndoThreadProc(std::wstring dest) {
-    ChronoSync::SyncCallbacks callbacks;
+    PrevueSync::SyncCallbacks callbacks;
     callbacks.onLog = [](const std::wstring& message, bool isError) {
         std::wstring prefix = isError ? L"[ERROR] " : L"[INFO] ";
         g_MsgRegistry.PushLog(prefix + message);
@@ -207,6 +207,6 @@ void UndoThreadProc(std::wstring dest) {
         g_MsgRegistry.SetStatus(L"Scanning trash: " + TruncateForStatus(rootDir, 200));
     };
 
-    ChronoSync::SyncEngine::UndoPruning(dest, callbacks);
+    PrevueSync::SyncEngine::UndoPruning(dest, callbacks);
     PostMessageW(g_hWndMain, WM_SYNC_UNDO_COMPLETE, 0, 0);
 }

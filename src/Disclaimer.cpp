@@ -9,10 +9,10 @@
 #pragma comment(lib, "advapi32.lib")
 #endif
 
-namespace ChronoSync {
+namespace PrevueSync {
 
 namespace {
-    constexpr wchar_t kRegKeyPath[] = L"Software\\ChronoSync";
+    constexpr wchar_t kRegKeyPath[] = L"Software\\PrevueSync";
     constexpr wchar_t kRegValueName[] = L"DisclaimerVersionAccepted";
 
     constexpr int ID_DISCLAIMER_EDIT = 9301;
@@ -27,14 +27,14 @@ namespace {
     };
 
     static std::wstring BuildDisclaimerText() {
-        return L"ChronoSync Disclaimer\r\n"
+        return L"PrevueSync Disclaimer\r\n"
                L"====================\r\n\r\n"
-               L"ChronoSync copies, overwrites, and may permanently delete files on your computer, "
+               L"PrevueSync copies, overwrites, and may permanently delete files on your computer, "
                L"especially when options such as \"Prune destination\" are enabled.\r\n\r\n"
-               L"ChronoSync is provided as-is, without warranty. The authors and contributors of ChronoSync "
+               L"PrevueSync is provided as-is, without warranty. The authors and contributors of PrevueSync "
                L"are not responsible for any lost, corrupted, overwritten, or deleted data, or for "
                L"any other damage arising from your use of this software.\r\n\r\n"
-               L"ChronoSync is designed to help prevent mistakes by providing Preview, Analyze Plan, "
+               L"PrevueSync is designed to help prevent mistakes by providing Preview, Analyze Plan, "
                L"History, and Versioned Backups.\r\n\r\n"
                L"However, no software can guarantee protection from user error. Always maintain "
                L"independent backups of important data.\r\n\r\n"
@@ -43,7 +43,7 @@ namespace {
                L"  - Verifying source and destination folders\r\n"
                L"  - Reviewing Preview and Analyze Plan before destructive operations\r\n"
                L"  - Understanding sync options you enable\r\n\r\n"
-               L"By clicking \"I Understand\" or continuing to use ChronoSync, you agree to these terms.";
+               L"By clicking \"I Understand\" or continuing to use PrevueSync, you agree to these terms.";
     }
 
     static LRESULT CALLBACK DisclaimerWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -155,7 +155,7 @@ namespace {
         wc.hInstance = GetModuleHandleW(NULL);
         wc.hCursor = LoadCursor(NULL, IDC_ARROW);
         wc.hbrBackground = g_hbrBackground ? g_hbrBackground : reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
-        wc.lpszClassName = L"ChronoSyncDisclaimerWindow";
+        wc.lpszClassName = L"PrevueSyncDisclaimerWindow";
         if (!RegisterClassExW(&wc)) {
             return false;
         }
@@ -174,8 +174,8 @@ namespace {
         EnableWindow(parent, FALSE);
         HWND hwndDlg = CreateWindowExW(
             WS_EX_DLGMODALFRAME,
-            L"ChronoSyncDisclaimerWindow",
-            requireAcceptance ? L"ChronoSync - Disclaimer (required)" : L"ChronoSync - Disclaimer",
+            L"PrevueSyncDisclaimerWindow",
+            requireAcceptance ? L"PrevueSync - Disclaimer (required)" : L"PrevueSync - Disclaimer",
             WindowStyle::ResizableDialog,
             CW_USEDEFAULT, CW_USEDEFAULT, 560, 420,
             parent, NULL, GetModuleHandleW(NULL), &mode);
@@ -245,9 +245,9 @@ void ShowDisclaimerDialog(HWND parent) {
 }
 
 void PrintCliDisclaimer() {
-    std::wcerr << L"DISCLAIMER: ChronoSync can overwrite or delete files. You use this software at your own "
+    std::wcerr << L"DISCLAIMER: PrevueSync can overwrite or delete files. You use this software at your own "
                   L"risk; the authors are not responsible for lost or destroyed data."
                << std::endl;
 }
 
-} // namespace ChronoSync
+} // namespace PrevueSync

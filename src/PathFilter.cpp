@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <cwctype>
 
-namespace ChronoSync {
+namespace PrevueSync {
 
     static std::wstring Trim(const std::wstring& s) {
         size_t start = 0;
@@ -225,4 +225,4 @@ namespace ChronoSync {
         return false;
     }
 
-} // namespace ChronoSync
+} // namespace PrevueSync

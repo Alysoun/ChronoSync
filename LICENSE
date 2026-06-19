@@ -1,11 +1,11 @@
-ChronoSync Dual LicenseVersion 1.0.0 — June 2026
+PrevueSync Dual License Version 1.0.0 — June 2026
 
 Copyright (c) 2026 Michael Gartner. All rights reserved.
 
 IMPORTANT: This is not open-source software. This is not an MIT, GPL, or
 Apache-licensed project.
 
-ChronoSync is offered under a dual-license model:
+PrevueSync is offered under a dual-license model:
 
   LICENSE A — GRATIS USE (Sections 3–4 and 8–9)
     Free for personal use and internal business use of official releases.
@@ -21,30 +21,30 @@ only License A applies.
 
    "Official release" means a binary or source package published by
    the copyright holder through the official GitHub repository at
-   https://github.com/Alysoun/ChronoSync or through other channels
+   https://github.com/Alysoun/PrevueSync or through other channels
    the copyright holder expressly designates as official (for example,
    a GitHub Release asset attached to a tagged version). A build you
    compile locally from source, an unofficial mirror, or a modified
    fork is not an official release unless the copyright holder
    designates it as such in writing.
 
-   "Internal business use" means use of ChronoSync within a single
+   "Internal business use" means use of PrevueSync within a single
    organization — including its employees and contractors — to sync
    that organization's own data on systems it owns or controls.
    Internal business use is for the organization's own operations, not
    for offering sync or backup services to outside customers.
 
    Example (permitted under License A): A consulting firm with fifty
-   employees installs ChronoSync on staff workstations to sync
+   employees installs PrevueSync on staff workstations to sync
    internal project folders and tooling the firm controls.
 
    Example (requires License B): That same firm offers a paid
-   "ChronoSync-powered backup" or managed sync service to external
-   clients, or redistributes ChronoSync as part of a product it sells.
+   "PrevueSync-powered backup" or managed sync service to external
+   clients, or redistributes PrevueSync as part of a product it sells.
 
 2. Ownership
 
-   ChronoSync (including all source code, object code, executables,
+   PrevueSync (including all source code, object code, executables,
    icons, documentation, and derivative works) is owned exclusively by
    the copyright holder identified in the COPYRIGHT file.
 
@@ -57,15 +57,15 @@ only License A applies.
 
 3. License A — Gratis use (personal and internal business)
 
-   If you obtained ChronoSync through an official release (as defined
+   If you obtained PrevueSync through an official release (as defined
    in Section 1), you are granted a non-exclusive, non-transferable,
    revocable license at no charge to:
 
-   (a) install and run ChronoSync on computers you own or control;
+   (a) install and run PrevueSync on computers you own or control;
 
-   (b) use ChronoSync for personal, non-commercial purposes; and
+   (b) use PrevueSync for personal, non-commercial purposes; and
 
-   (c) use ChronoSync for internal business use (as defined in
+   (c) use PrevueSync for internal business use (as defined in
        Section 1) within your organization.
 
    No fee is required for License A uses described above.
@@ -75,13 +75,13 @@ only License A applies.
    Under License A, unless the copyright holder gives you prior written
    permission (a commercial agreement under License B), you may not:
 
-   (a) redistribute, resell, rent, lease, or sublicense ChronoSync
+   (a) redistribute, resell, rent, lease, or sublicense PrevueSync
        or any portion of it;
 
-   (b) offer ChronoSync as a hosted, managed, or software-as-a-service
+   (b) offer PrevueSync as a hosted, managed, or software-as-a-service
        (SaaS) product to third parties;
 
-   (c) bundle, embed, or ship ChronoSync as part of another product
+   (c) bundle, embed, or ship PrevueSync as part of another product
        (OEM bundling) for distribution to third parties;
 
    (d) remove or alter copyright, trademark, or license notices;
@@ -89,7 +89,7 @@ only License A applies.
    (e) reverse engineer, decompile, or disassemble the software except
        where applicable law expressly permits despite this limitation;
 
-   (f) use the name "ChronoSync" or associated branding in a way that
+   (f) use the name "PrevueSync" or associated branding in a way that
        suggests endorsement, partnership, or ownership without written
        consent.
 
@@ -127,13 +127,13 @@ only License A applies.
    (or a future assignee, such as a wholly owned LLC, if rights are
    transferred later):
 
-   (a) commercial redistribution or resale of ChronoSync, in whole or
+   (a) commercial redistribution or resale of PrevueSync, in whole or
        in part;
 
-   (b) offering ChronoSync (or a derivative or rebranded version) as a
+   (b) offering PrevueSync (or a derivative or rebranded version) as a
        hosted, managed, or SaaS sync or backup service to third parties;
 
-   (c) OEM bundling — embedding or distributing ChronoSync inside
+   (c) OEM bundling — embedding or distributing PrevueSync inside
        another commercial product or appliance;
 
    (d) enterprise site licenses, white-label deployments, or other

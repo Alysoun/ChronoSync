@@ -1,6 +1,6 @@
-# Project Plan: ChronoSync Folder Synchronizer (GUI Refinements)
+# Project Plan: PrevueSync Folder Synchronizer (GUI Refinements)
 
-ChronoSync is a high-performance, native Windows C++ desktop utility for ultra-fast differential folder synchronization. It features a modern dark-themed Graphical User Interface (GUI), supports selective directory pruning, runs synchronization on a background worker thread, displays a Sync Preview dialog using a high-performance Virtual ListView, and employs atomic, corruption-free file replacement operations.
+PrevueSync is a high-performance, native Windows C++ desktop utility for ultra-fast differential folder synchronization. It features a modern dark-themed Graphical User Interface (GUI), supports selective directory pruning, runs synchronization on a background worker thread, displays a Sync Preview dialog using a high-performance Virtual ListView, and employs atomic, corruption-free file replacement operations.
 
 ---
 
@@ -20,7 +20,7 @@ ChronoSync is a high-performance, native Windows C++ desktop utility for ultra-f
 2. **Action Buttons**:
    - `Preview Changes`: Performs comparative dry-run and displays a Sync Preview pop-up list.
    - `Sync Now`: Runs the physical differential synchronization.
-   - `Undo Pruning`: Restores deleted files from the `.chrono_trash` folder.
+   - `Undo Pruning`: Restores deleted files from the `.prevue_trash` folder.
 3. **Responsive Threading**: Disables action and folder-browse buttons during operations. Reports progress using thread-safe `PostMessageW` dispatch queues.
 4. **Checkbox Contrast Fix**: Employs a borderless checkbox beside an independent static control (`SS_NOTIFY` enabled) to allow proper text painting in bright white under Visual Styles v6.
 5. **Sync Preview Window**: Secondary window featuring a dark-themed ListView that renders comparison results, complete with a symmetrically aligned **Export CSV...** action button.

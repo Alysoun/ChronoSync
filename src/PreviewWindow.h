@@ -5,8 +5,8 @@
 #include <string>
 
 struct PreviewWindowContext {
-    std::vector<ChronoSync::PreviewItem>* pList = nullptr;
-    ChronoSync::SyncPlanAnalysis analysis;
+    std::vector<PrevueSync::PreviewItem>* pList = nullptr;
+    PrevueSync::SyncPlanAnalysis analysis;
     bool hasAnalysis = false;
     std::vector<int> displayedIndices;
     std::wstring sourceRoot;

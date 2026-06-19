@@ -6,7 +6,7 @@
 
 #pragma comment(lib, "bcrypt.lib")
 
-namespace ChronoSync {
+namespace PrevueSync {
 
     static constexpr DWORD kReadBufferSize = 4 * 1024 * 1024;
     static constexpr unsigned long long kProgressIntervalBytes = 8ULL * 1024 * 1024;
@@ -149,4 +149,4 @@ namespace ChronoSync {
         return hex;
     }
 
-} // namespace ChronoSync
+} // namespace PrevueSync

@@ -3,7 +3,7 @@
 #include <functional>
 #include <string>
 
-namespace ChronoSync {
+namespace PrevueSync {
 
     struct DeltaCopyResult {
         bool success = false;
@@ -22,4 +22,4 @@ namespace ChronoSync {
                                         const std::function<void(unsigned long long, unsigned long long)>& progressCallback);
     };
 
-} // namespace ChronoSync
+} // namespace PrevueSync
