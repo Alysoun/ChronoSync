@@ -204,6 +204,21 @@ By downloading, building, or running ChronoSync (GUI or CLI), you agree to these
 
 The GUI shows the full disclaimer on first launch and provides a link to read it again. The CLI prints a notice when running `--sync` or `--queue`.
 
-## License
+## License and ownership
 
-MIT (see repository for details).
+**ChronoSync is proprietary software. It is not MIT/GPL/open source.**
+
+| Document | Purpose |
+|----------|---------|
+| [LICENSE](LICENSE) | Terms for using official releases |
+| [COPYRIGHT](COPYRIGHT) | Who owns the software and IP |
+
+**Copyright (c) 2026 Michael Gartner.** All rights reserved.
+
+You may use official release binaries for **personal or internal business** purposes under the [LICENSE](LICENSE). You may **not** redistribute, rebrand, or commercialize ChronoSync without a separate written agreement.
+
+ChronoSync is currently held by the copyright holder personally. The copyright holder may **later assign or license** intellectual property to a wholly owned legal entity (e.g. an LLC) if and when they choose. That does not revoke your right to use a release you lawfully obtained under the terms published with that release.
+
+**Commercial / enterprise licensing:** Rpracing00@gmail.com
+
+When you publish a GitHub Release, include `LICENSE` and `COPYRIGHT` in the zip alongside `ChronoSync.exe` and `README.md`.

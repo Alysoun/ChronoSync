@@ -1,0 +1,102 @@
+ChronoSync Proprietary Software License
+Version 0.1.0 — June 2026
+
+Copyright (c) 2026 Michael Gartner. All rights reserved.
+
+IMPORTANT: This is not open-source software. This is not an MIT, GPL, or
+Apache-licensed project. Unless you have a separate written agreement
+with the copyright holder, the terms below apply.
+
+1. Ownership
+
+   ChronoSync (including all source code, object code, executables,
+   icons, documentation, and derivative works) is owned exclusively by
+   the copyright holder identified in the COPYRIGHT file.
+
+   The copyright holder reserves the right to assign, license, or
+   transfer all intellectual property rights to an affiliated legal
+   entity, including a limited liability company wholly owned or
+   controlled by the copyright holder. Any such transfer does not
+   revoke your right to use a release version you lawfully obtained
+   under the terms in effect when you obtained it.
+
+2. Grant of license
+
+   If you obtained ChronoSync through an official release published by
+   the copyright holder (for example, a GitHub Release asset or a
+   build distributed by the copyright holder), you are granted a
+   non-exclusive, non-transferable, revocable license to:
+
+   (a) install and run one copy of the provided binaries on computers
+       you own or control; and
+
+   (b) use ChronoSync for personal or internal business purposes.
+
+3. Restrictions
+
+   Unless the copyright holder gives you prior written permission, you
+   may not:
+
+   (a) sell, rent, lease, sublicense, or distribute ChronoSync or any
+       portion of it, whether for profit or otherwise;
+
+   (b) use ChronoSync to provide a hosted, managed, or commercial sync
+       service to third parties;
+
+   (c) remove or alter copyright, trademark, or license notices;
+
+   (d) reverse engineer, decompile, or disassemble the software except
+       where applicable law expressly permits despite this limitation;
+
+   (e) use the name "ChronoSync" or associated branding in a way that
+       suggests endorsement, partnership, or ownership without written
+       consent.
+
+   Viewing source code in a public repository does not grant any rights
+   beyond those expressly stated in this license. Cloning or forking the
+   repository does not grant a license to redistribute, rebrand, or
+   commercialize the software.
+
+4. Contributions
+
+   If you submit a pull request, patch, or other contribution, you
+   represent that you have the right to submit it. Unless otherwise
+   agreed in writing, contributions are licensed to the copyright
+   holder under the same proprietary terms so they may be incorporated
+   into owned releases without obligation to open-source them.
+
+5. Disclaimer of warranty
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND
+   NONINFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR
+   ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+   CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION
+   WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+   See the application disclaimer and README for additional user
+   responsibility regarding data loss.
+
+6. Commercial licensing
+
+   Commercial redistribution, OEM embedding, SaaS use, enterprise site
+   licenses, and other uses beyond personal or internal business use
+   require a separate written agreement with the copyright holder (or
+   a future assignee, such as a wholly owned LLC, if rights are
+   transferred later).
+
+   Contact: Rpracing00@gmail.com
+
+7. Termination
+
+   This license terminates automatically if you violate any term. Upon
+   termination, you must stop using and destroy all copies in your
+   possession.
+
+8. Governing terms
+
+   This license constitutes the entire agreement regarding use of
+   official releases. The copyright holder may publish updated license
+   terms for future releases; older releases remain governed by the
+   terms published with that release.
