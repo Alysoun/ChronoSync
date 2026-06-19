@@ -15,9 +15,12 @@ namespace {
     constexpr int ID_HISTORY_COMPARE_BTN = 9104;
     constexpr int ID_HISTORY_CLOSE_BTN = 9105;
     constexpr int ID_HISTORY_COPY_BTN = 9106;
+    constexpr int ID_HISTORY_SNAPSHOT_NOTE = 9107;
+    constexpr int ID_HISTORY_COMPARE_LABEL = 9108;
 
     constexpr int kMargin = 12;
     constexpr int kBottomPanelH = 88;
+    constexpr int kSnapshotNoteH = 44;
 
     struct HistoryDialogState {
         std::wstring destination;
@@ -25,10 +28,48 @@ namespace {
         std::vector<size_t> comparableIndices;
     };
 
+    static void UpdateSnapshotCompareUi(HWND hWnd, const std::vector<ChronoSync::SyncHistoryEntry>& entries,
+                                      const std::vector<size_t>& comparableIndices) {
+        HWND hwndNote = GetDlgItem(hWnd, ID_HISTORY_SNAPSHOT_NOTE);
+        const size_t withSnapshot = comparableIndices.size();
+        const size_t total = entries.size();
+        const size_t cap = ChronoSync::SyncHistoryIO::MaxSnapshotEntries;
+
+        std::wstring note;
+        if (total == 0) {
+            note = L"Run history is saved under .chrono_history after each sync.";
+        } else if (withSnapshot >= 2) {
+            note = L"Compare uses per-file snapshots from runs where the destination had at most " +
+                   std::to_wstring(cap) + L" items.";
+            if (withSnapshot < total) {
+                note += L" " + std::to_wstring(total - withSnapshot) +
+                        L" run(s) on this folder are stats-only (no snapshot).";
+            }
+        } else if (withSnapshot == 1) {
+            note = L"Compare needs two snapshot runs. Only 1 of " + std::to_wstring(total) +
+                   L" run(s) has a snapshot; sync again after the destination is under " +
+                   std::to_wstring(cap) + L" items, or use a smaller folder.";
+        } else {
+            note = L"Compare is unavailable for this destination: all " + std::to_wstring(total) +
+                   L" logged run(s) are stats-only because the folder exceeds " + std::to_wstring(cap) +
+                   L" items. History still records copies, skips, and timing for each sync.";
+        }
+
+        if (hwndNote) {
+            SetWindowTextW(hwndNote, note.c_str());
+        }
+
+        const BOOL compareReady = withSnapshot >= 2 ? TRUE : FALSE;
+        EnableWindow(GetDlgItem(hWnd, ID_HISTORY_COMPARE_BTN), compareReady);
+        EnableWindow(GetDlgItem(hWnd, ID_HISTORY_OLDER_COMBO), compareReady);
+        EnableWindow(GetDlgItem(hWnd, ID_HISTORY_NEWER_COMBO), compareReady);
+    }
+
     static void LayoutHistoryWindow(HWND hWnd, int cx, int cy) {
         const int contentW = (std::max)(200, cx - 2 * kMargin);
-        const int reportH = (std::max)(120, cy - kBottomPanelH - 52);
-        const int compareY = kMargin + 22 + reportH + 10;
+        const int reportH = (std::max)(100, cy - kBottomPanelH - 52 - kSnapshotNoteH - 8);
+        const int noteY = kMargin + 22 + reportH + 6;
+        const int compareY = noteY + kSnapshotNoteH + 8;
         const int comboY = compareY + 24;
         const int btnY = cy - kMargin - 30;
         const int comboW = (std::max)(120, (contentW - 90) / 2);
@@ -38,7 +79,12 @@ namespace {
             MoveWindow(hwndReport, kMargin, 32, contentW, reportH, TRUE);
         }
 
-        HWND hwndCompareLabel = FindWindowExW(hWnd, NULL, L"STATIC", L"Compare snapshots:");
+        HWND hwndNote = GetDlgItem(hWnd, ID_HISTORY_SNAPSHOT_NOTE);
+        if (hwndNote) {
+            MoveWindow(hwndNote, kMargin, noteY, contentW, kSnapshotNoteH, TRUE);
+        }
+
+        HWND hwndCompareLabel = GetDlgItem(hWnd, ID_HISTORY_COMPARE_LABEL);
         if (hwndCompareLabel) {
             MoveWindow(hwndCompareLabel, kMargin, compareY, 200, 20, TRUE);
         }
@@ -98,7 +144,7 @@ namespace {
             SendMessageW(newer, CB_SETCURSEL, comparableIndices.size() > 1 ? 1 : 0, 0);
         }
 
-        EnableWindow(GetDlgItem(hWnd, ID_HISTORY_COMPARE_BTN), comparableIndices.size() >= 2 ? TRUE : FALSE);
+        UpdateSnapshotCompareUi(hWnd, entries, comparableIndices);
     }
 
     static LRESULT CALLBACK HistoryWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -125,8 +171,15 @@ namespace {
                 std::wstring report = ChronoSync::SyncHistoryIO::FormatHistoryReport(recent, 7);
                 SetWindowTextW(hwndReport, report.c_str());
 
+                CreateWindowExW(0, L"STATIC", L"",
+                                WS_CHILD | WS_VISIBLE,
+                                kMargin, 302, 560, kSnapshotNoteH, hWnd,
+                                (HMENU)(INT_PTR)ID_HISTORY_SNAPSHOT_NOTE, NULL, NULL);
+                SendMessageW(GetDlgItem(hWnd, ID_HISTORY_SNAPSHOT_NOTE), WM_SETFONT, (WPARAM)g_hFontNormal, TRUE);
+
                 CreateWindowExW(0, L"STATIC", L"Compare snapshots:",
-                                WS_CHILD | WS_VISIBLE, kMargin, 302, 160, 20, hWnd, NULL, NULL, NULL);
+                                WS_CHILD | WS_VISIBLE, kMargin, 302, 160, 20, hWnd,
+                                (HMENU)(INT_PTR)ID_HISTORY_COMPARE_LABEL, NULL, NULL);
                 CreateWindowExW(0, L"STATIC", L"Older:",
                                 WS_CHILD | WS_VISIBLE, kMargin, 326, 50, 20, hWnd, NULL, NULL, NULL);
                 CreateWindowExW(0, L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
@@ -181,8 +234,12 @@ namespace {
                 } else if (wmId == ID_HISTORY_COMPARE_BTN) {
                     if (state->comparableIndices.size() < 2) {
                         MessageBoxW(hWnd,
-                                    L"No comparable snapshots are available. Runs on very large destination "
-                                    L"trees are logged without a full snapshot file.",
+                                    (L"Compare needs two runs that saved full snapshots.\n\n"
+                                     L"This destination has more than " +
+                                     std::to_wstring(ChronoSync::SyncHistoryIO::MaxSnapshotEntries) +
+                                     L" items, so recent runs are logged with stats only "
+                                     L"(copies, skips, bytes, timing) but without per-file snapshot files.")
+                                        .c_str(),
                                     L"ChronoSync History", MB_OK | MB_ICONINFORMATION);
                         break;
                     }
@@ -231,6 +288,11 @@ namespace {
                     SetTextColor(hdc, UiTheme::LogText);
                     SetBkColor(hdc, UiTheme::LogBg);
                     return (INT_PTR)g_hbrLogBackground;
+                }
+                if (hwndCtrl == GetDlgItem(hWnd, ID_HISTORY_SNAPSHOT_NOTE)) {
+                    SetTextColor(hdc, UiTheme::MutedText);
+                    SetBkMode(hdc, TRANSPARENT);
+                    return (INT_PTR)g_hbrBackground;
                 }
                 SetTextColor(hdc, UiTheme::LabelText);
                 SetBkMode(hdc, TRANSPARENT);

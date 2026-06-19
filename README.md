@@ -2,6 +2,10 @@
 
 High-performance native Windows folder synchronizer with differential sync, preview, pruning with undo, and a dark-themed GUI.
 
+**Design goal:** confidence before execution — know exactly what will happen before files are touched.
+
+**Disclaimer:** ChronoSync can overwrite or permanently delete files. You use this software at your own risk — see [Disclaimer](#disclaimer) below.
+
 ## Features
 
 - **Differential sync** — copies only new or changed files (timestamp or SHA256 comparison)
@@ -19,6 +23,20 @@ High-performance native Windows folder synchronizer with differential sync, prev
 - **Sync profiles** — save/load source, destination, prune, filters, and compare options (`.chronosync` JSON)
 - **Plan analysis** — **Analyze Plan** summarizes transfer size, largest files, category and extension breakdown, duration estimate, and LOW/MEDIUM/HIGH risk before syncing; preview shows risk headline
 - **Sync history** — each sync records run metadata and a destination snapshot under `.chrono_history`; **History...** shows recent activity and compares snapshots for `+ / - / ~` counts
+
+## Current capability
+
+Numbers from real-world use (not formal benchmarks). Updated as larger runs are validated.
+
+| Metric | Observed |
+|--------|----------|
+| Items scanned (source tree) | ~240k |
+| Items scanned (destination tree) | ~290k |
+| Incremental sync (already in sync) | ~215k skipped, handful of files copied |
+| Largest single planned transfer | ~3.2 GB |
+| History snapshot cap | 25,000 items per destination tree |
+| Long path support (`\\?\`) | Yes |
+| Automated regression tests | 20 |
 
 ## Build
 
@@ -102,9 +120,11 @@ ChronoSync already covers the usual sync-tool checklist (preview, filters, profi
 
 ### Deep Windows integration (performance & reliability)
 
+The highest-impact item here is **NTFS USN Journal scanning**. Today a large tree means walking every file to find a few changes; with the change journal, the same work becomes O(changes) instead of O(all files). That matters more than most UI polish for massive project trees.
+
 | Priority | Feature | Description |
 |----------|---------|-------------|
-| Medium | **NTFS USN Journal scanning** | Record USN index after sync; next run queries the change journal instead of full tree walk — O(changes) instead of O(all files) |
+| **High** | **NTFS USN Journal scanning** | Record USN index after sync; next run queries the change journal instead of full tree walk — ask NTFS what changed, not the whole disk |
 | Medium | **VSS open-file backup** | Optional Volume Shadow Copy snapshot for locked files (`ERROR_SHARING_VIOLATION` during IDE builds, games, databases) |
 | Low | **Sparse file preservation** | Detect `FILE_ATTRIBUTE_SPARSE_FILE`; copy only allocated ranges via `FSCTL_QUERY_ALLOCATED_RANGES` / `FSCTL_SET_SPARSE` so VHDX/PAK backups don't bloat |
 
@@ -119,7 +139,70 @@ ChronoSync already covers the usual sync-tool checklist (preview, filters, profi
 
 > **Know exactly what ChronoSync is about to do before you let it touch your files.**
 
-Speed matters, but the standout bet is a smarter preview and plan analysis layer — not another copy-engine trick.
+ChronoSync is not trying to be the fastest or most feature-dense sync tool. The bet is **confidence before execution** — preview, analyze, history, and backups so you can approve work before it runs.
+
+Speed still matters, but the standout differentiator is a smarter preview and plan analysis layer — not another copy-engine trick.
+
+### Enterprise readiness (long-term)
+
+Enterprise adoption is not a single certification badge. It is a stack of requirements across **security**, **reliability**, **compliance**, and **operational maturity**. ChronoSync already has a safety-first architecture (atomic writes, preview/analyze, versioned backups, undo, SHA256, history, long-path support). The tracks below are what CTOs, CISOs, and compliance teams typically evaluate before deployment in finance, healthcare, government, or regulated SaaS environments.
+
+**Today:** suitable for power users and small teams with strong local observability.
+
+**Target:** packaged, auditable, deployable software an IT department can roll out with confidence.
+
+| Track | Status | Roadmap |
+|-------|--------|---------|
+| **Security hardening** | Partial | Code signing (EV ideal); signed/tamper-proof updates; static analysis + fuzzing; STRIDE / MITRE ATT&CK threat modeling; formal symlink/path-traversal/race reviews; secure temp-file policy (atomic `.chrono_tmp` already); no elevation-of-privilege paths; no plaintext secrets |
+| **Compliance alignment** | Not started | Organizational, not only code: documented processes, access controls, audit logs, incident response, vendor risk assessments, data retention. Map to frameworks customers require: SOC 2 Type II, ISO 27001, HIPAA, FedRAMP, GDPR, NIST 800-53 |
+| **Enterprise deployment** | Partial | MSI + silent install/uninstall; Group Policy; registry/JSON central config; portable mode; run without admin for normal sync; remote configuration; centralized log shipping |
+| **Scalability & stress testing** | Partial | Formal torture tests: millions of files, multi-TB trees, 24/7 soak (memory leaks); graceful degradation under network loss, disk full, locked files, permission errors, AV interference |
+| **Observability & monitoring** | Partial | Local logs/history exist; add Windows Event Log, syslog, SIEM-friendly JSON (Splunk/Sentinel/Elastic), optional SNMP, central dashboards |
+| **RBAC & policy** | Not started | Admin vs operator roles; lock dangerous options (e.g. prune) via policy; audit trail of who ran what, when, with which profile |
+| **Enterprise support** | Not started | SLAs, support contracts, onboarding, security questionnaires, pen-test reports, business continuity, liability coverage — business layer as much as engineering |
+| **Formal QA & release engineering** | Partial | `ChronoSyncTests.exe` + reproducible builds exist; add version pinning, release notes discipline, regression matrix, coverage targets, LTS branches |
+| **Data integrity guarantees** | Strong base | Already: SHA256 compare/verify, atomic copy, delta copy, versioned backups, undo, snapshot history. Add: end-to-end integrity reports per run, optional signed/tamper-evident snapshot manifests |
+
+#### Suggested phasing
+
+| Phase | Focus | Outcomes |
+|-------|-------|----------|
+| **1 — Prove it** | Stress testing, Event Log / structured logging, MSI silent install, release notes + LTS tagging | IT can pilot on one fleet; failures are measurable |
+| **2 — Secure it** | Code signing, update signing, static analysis/fuzzing, threat model doc, pen test | Security review questionnaires become answerable |
+| **3 — Operate it** | Central config, RBAC/policy, audit trail, SIEM export | Multi-user orgs can enforce policy |
+| **4 — Certify it** | Compliance program (SOC 2 / ISO 27001 as needed), support SLAs, vendor docs | Enterprise procurement-ready |
+
+#### Already enterprise-grade (design)
+
+These are ahead of many commercial sync tools and do not need reinvention — only formal verification and documentation:
+
+- Transparent preview and plan analysis before destructive work
+- Atomic destination writes and block-compare copy
+- Versioned prune backups with undo
+- Per-run history and snapshot diff (within size limits)
+- Optional SHA256 compare and post-copy verification
+- Disclaimer and explicit risk surfacing in the UI
+
+## Disclaimer
+
+ChronoSync copies, overwrites, and may permanently delete files on your computer, especially when options such as **Prune destination** are enabled.
+
+**YOU USE THIS SOFTWARE AT YOUR OWN RISK.** The authors and contributors of ChronoSync are not responsible for any lost, corrupted, overwritten, or deleted data, or for any other damage arising from your use of this software.
+
+ChronoSync is designed to help prevent mistakes by providing **Preview**, **Analyze Plan**, **History**, and **Versioned Backups**.
+
+However, no software can guarantee protection from user error. Always maintain independent backups of important data.
+
+You are solely responsible for:
+
+- Backing up important data before syncing
+- Verifying source and destination folders
+- Reviewing **Preview** and **Analyze Plan** before destructive operations
+- Understanding the sync options you enable
+
+By downloading, building, or running ChronoSync (GUI or CLI), you agree to these terms.
+
+The GUI shows the full disclaimer on first launch and provides a link to read it again. The CLI prints a notice when running `--sync` or `--queue`.
 
 ## License
 

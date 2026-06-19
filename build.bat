@@ -49,7 +49,7 @@ if %errorlevel% neq 0 (
     echo [ERROR] Resource compilation failed with MSVC.
     exit /b %errorlevel%
 )
-cl.exe /EHsc /std:c++20 /utf-8 /MT /O2 /W4 /WX /Isrc /Fe:ChronoSync.exe src\Main.cpp src\GuiCommon.cpp src\GuiDialogs.cpp src\SyncGuiWorker.cpp src\ScheduleDialog.cpp src\AnalysisWindow.cpp src\PreviewWindow.cpp src\MainWindow.cpp src\HistoryWindow.cpp src\SyncHashCache.cpp src\SyncHistory.cpp src\SyncEngine.cpp src\SyncPlan.cpp src\SyncPlanAnalysis.cpp src\SyncExecutor.cpp src\SyncBackup.cpp src\PathFilter.cpp src\SyncProfile.cpp src\FileHash.cpp src\WinPath.cpp src\SyncJob.cpp src\NetworkShare.cpp src\DeltaCopy.cpp src\TaskScheduler.cpp src\CliRunner.cpp ChronoSync.res dwmapi.lib comctl32.lib ole32.lib shell32.lib bcrypt.lib mpr.lib uxtheme.lib user32.lib gdi32.lib /link /SUBSYSTEM:WINDOWS
+cl.exe /EHsc /std:c++20 /utf-8 /MT /O2 /W4 /WX /Isrc /Fe:ChronoSync.exe src\Main.cpp src\GuiCommon.cpp src\GuiDialogs.cpp src\Disclaimer.cpp src\SyncGuiWorker.cpp src\ScheduleDialog.cpp src\AnalysisWindow.cpp src\PreviewWindow.cpp src\MainWindow.cpp src\HistoryWindow.cpp src\SyncHashCache.cpp src\SyncHistory.cpp src\SyncEngine.cpp src\SyncPlan.cpp src\SyncPlanAnalysis.cpp src\SyncExecutor.cpp src\SyncBackup.cpp src\PathFilter.cpp src\SyncProfile.cpp src\FileHash.cpp src\WinPath.cpp src\SyncJob.cpp src\NetworkShare.cpp src\DeltaCopy.cpp src\TaskScheduler.cpp src\CliRunner.cpp ChronoSync.res dwmapi.lib comctl32.lib ole32.lib shell32.lib bcrypt.lib mpr.lib uxtheme.lib user32.lib gdi32.lib advapi32.lib /link /SUBSYSTEM:WINDOWS
 if %errorlevel% neq 0 (
     echo [ERROR] GUI compilation failed with MSVC.
     exit /b %errorlevel%
@@ -79,7 +79,7 @@ if %errorlevel% neq 0 (
     echo [ERROR] Resource compilation failed with MinGW.
     exit /b %errorlevel%
 )
-g++ -std=c++20 -O3 -Wall -Wextra -Werror -Isrc -static -static-libgcc -static-libstdc++ -mwindows -o ChronoSync.exe src/Main.cpp src/GuiCommon.cpp src/GuiDialogs.cpp src/SyncGuiWorker.cpp src/ScheduleDialog.cpp src/AnalysisWindow.cpp src/PreviewWindow.cpp src/MainWindow.cpp src/HistoryWindow.cpp src/SyncHashCache.cpp src/SyncHistory.cpp src/SyncEngine.cpp src/SyncPlan.cpp src/SyncPlanAnalysis.cpp src/SyncExecutor.cpp src/SyncBackup.cpp src/PathFilter.cpp src/SyncProfile.cpp src/FileHash.cpp src/WinPath.cpp src/SyncJob.cpp src/NetworkShare.cpp src/DeltaCopy.cpp src/TaskScheduler.cpp src/CliRunner.cpp ChronoSync_res.o -ldwmapi -lcomctl32 -lole32 -lshell32 -lbcrypt -lmpr -luxtheme -lgdi32
+g++ -std=c++20 -O3 -Wall -Wextra -Werror -Isrc -static -static-libgcc -static-libstdc++ -mwindows -o ChronoSync.exe src/Main.cpp src/GuiCommon.cpp src/GuiDialogs.cpp src/Disclaimer.cpp src/SyncGuiWorker.cpp src/ScheduleDialog.cpp src/AnalysisWindow.cpp src/PreviewWindow.cpp src/MainWindow.cpp src/HistoryWindow.cpp src/SyncHashCache.cpp src/SyncHistory.cpp src/SyncEngine.cpp src/SyncPlan.cpp src/SyncPlanAnalysis.cpp src/SyncExecutor.cpp src/SyncBackup.cpp src/PathFilter.cpp src/SyncProfile.cpp src/FileHash.cpp src/WinPath.cpp src/SyncJob.cpp src/NetworkShare.cpp src/DeltaCopy.cpp src/TaskScheduler.cpp src/CliRunner.cpp ChronoSync_res.o -ldwmapi -lcomctl32 -lole32 -lshell32 -lbcrypt -lmpr -luxtheme -lgdi32
 if %errorlevel% neq 0 (
     echo [ERROR] GUI compilation failed with MinGW.
     exit /b %errorlevel%

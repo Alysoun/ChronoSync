@@ -3,6 +3,7 @@
 #include "GuiCommon.h"
 #include "GuiDialogs.h"
 #include "SyncGuiWorker.h"
+#include "Disclaimer.h"
 #include "ScheduleDialog.h"
 #include "AnalysisWindow.h"
 #include "HistoryWindow.h"
@@ -162,6 +163,10 @@ static void ClearOperationLog() {
     g_logFollowTail = true;
 }
 
+static bool EnsureDisclaimerAccepted(HWND hWnd) {
+    return ChronoSync::PromptDisclaimerAcceptance(hWnd);
+}
+
 static void LayoutMainWindow(HWND hWnd, int cx, int cy) {
     if (!g_hWndSrcEdit || cx <= 0 || cy <= 0) {
         return;
@@ -242,7 +247,7 @@ static void LayoutMainWindow(HWND hWnd, int cx, int cy) {
     moveLabel(FindWindowExW(hWnd, NULL, L"STATIC", L"Sync Queue:"), y, 160);
     y += 24;
 
-    const int tailFixed = UiTheme::RowGap + bh + UiTheme::SectionGap + 22 + 26 + 28 + UiTheme::RowGap + 24 +
+    const int tailFixed = UiTheme::RowGap + bh + UiTheme::SectionGap + 22 + 26 + 28 + UiTheme::RowGap + 20 + 24 +
                           kLogSplitterH;
     int flexH = cy - y - tailFixed - m;
     if (flexH < kMinQueueH + kMinLogH) {
@@ -278,6 +283,11 @@ static void LayoutMainWindow(HWND hWnd, int cx, int cy) {
     }
     MoveWindow(g_hWndProgressBar, m + riskW + 8, y, progBarW, 22, TRUE);
     y += 28;
+
+    if (g_hWndDisclaimerLink) {
+        MoveWindow(g_hWndDisclaimerLink, m, y, w, 18, TRUE);
+    }
+    y += 20 + UiTheme::RowGap;
 
     moveLabel(FindWindowExW(hWnd, NULL, L"STATIC", L"Operation Log:"), y, 160);
     const int copyLogBtnW = 72;
@@ -491,7 +501,13 @@ static void CreateControls(HWND hWnd, HINSTANCE hInstance) {
                                       m, y, w / 2, 22, hWnd, (HMENU)ID_RISK_LABEL, hInstance, NULL);
     g_hWndProgressBar = CreateWindowExW(0, PROGRESS_CLASSW, L"", WS_CHILD | WS_VISIBLE,
                                         m + w / 2 + 8, y, w / 2 - 8, 22, hWnd, (HMENU)ID_PROGRESS_BAR, hInstance, NULL);
-    y += 28 + UiTheme::RowGap;
+    y += 28;
+
+    g_hWndDisclaimerLink = CreateWindowExW(0, L"STATIC",
+        L"Use at your own risk. Read disclaimer before syncing.",
+        WS_CHILD | WS_VISIBLE | SS_NOTIFY,
+        m, y, w, 18, hWnd, (HMENU)ID_DISCLAIMER_LINK, hInstance, NULL);
+    y += 20 + UiTheme::RowGap;
 
     HWND lblLog = CreateWindowExW(0, L"STATIC", L"Operation Log:", WS_CHILD | WS_VISIBLE,
                                   m, y, 160, 22, hWnd, NULL, hInstance, NULL);
@@ -559,6 +575,7 @@ static void CreateControls(HWND hWnd, HINSTANCE hInstance) {
     setUIFont(g_hWndCopyLogBtn);
     setUIFont(g_hWndStatusLabel);
     setUIFont(g_hWndRiskLabel);
+    setUIFont(g_hWndDisclaimerLink);
     SendMessageW(g_hWndLogEdit, WM_SETFONT, (WPARAM)g_hFontLog, TRUE);
 
     ApplyReadableTheme(hWnd);
@@ -590,6 +607,9 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
             CreateControls(hWnd, ((LPCREATESTRUCT)lParam)->hInstance);
             ClearRiskIndicator();
+            if (!ChronoSync::PromptDisclaimerAcceptance(hWnd)) {
+                DestroyWindow(hWnd);
+            }
             break;
         }
         case WM_GETMINMAXINFO: {
@@ -665,6 +685,11 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                 break;
             }
 
+            if (HIWORD(wParam) == STN_CLICKED && wmId == ID_DISCLAIMER_LINK) {
+                ChronoSync::ShowDisclaimerDialog(hWnd);
+                break;
+            }
+
             if (wmId == ID_COPY_LOG_BUTTON) {
                 CopyEditContentToClipboard(g_hWndLogEdit);
                 break;
@@ -684,6 +709,9 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                     ClearRiskIndicator();
                 }
             } else if (wmId == ID_UNDO_BUTTON) {
+                if (!EnsureDisclaimerAccepted(hWnd)) {
+                    break;
+                }
                 wchar_t dest[MAX_PATH];
                 GetWindowTextW(g_hWndDestEdit, dest, MAX_PATH);
                 std::wstring destPath(dest);
@@ -769,6 +797,9 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                 g_SyncJobQueue.clear();
                 RefreshQueueListbox();
             } else if (wmId == ID_RUN_QUEUE_BUTTON) {
+                if (!EnsureDisclaimerAccepted(hWnd)) {
+                    break;
+                }
                 if (g_SyncJobQueue.empty()) {
                     MessageBoxW(hWnd, L"The sync queue is empty.", L"ChronoSync Queue", MB_OK | MB_ICONINFORMATION);
                     break;
@@ -886,6 +917,9 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
                     }
                 }
             } else if (wmId == ID_SYNC_BUTTON) {
+                if (!EnsureDisclaimerAccepted(hWnd)) {
+                    break;
+                }
                 wchar_t src[MAX_PATH];
                 wchar_t dest[MAX_PATH];
                 GetWindowTextW(g_hWndSrcEdit, src, MAX_PATH);
@@ -920,6 +954,11 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
             HWND hwndCtrl = (HWND)lParam;
             if (hwndCtrl == g_hWndRiskLabel) {
                 SetTextColor(hdcStatic, UiTheme::LabelText);
+                SetBkMode(hdcStatic, TRANSPARENT);
+                return (INT_PTR)g_hbrBackground;
+            }
+            if (hwndCtrl == g_hWndDisclaimerLink) {
+                SetTextColor(hdcStatic, UiTheme::MutedText);
                 SetBkMode(hdcStatic, TRANSPARENT);
                 return (INT_PTR)g_hbrBackground;
             }

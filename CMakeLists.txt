@@ -28,6 +28,8 @@ add_executable(ChronoSync WIN32
     src/MainWindow.h
     src/HistoryWindow.cpp
     src/HistoryWindow.h
+    src/Disclaimer.cpp
+    src/Disclaimer.h
     src/SyncHashCache.cpp
     src/SyncHashCache.h
     src/SyncHistory.cpp
@@ -99,14 +101,14 @@ target_include_directories(ChronoSyncTests PRIVATE src)
 if(MSVC)
     target_compile_options(ChronoSync PRIVATE /W4 /WX /EHsc /utf-8)
     target_compile_options(ChronoSyncTests PRIVATE /W4 /WX /EHsc /utf-8)
-    target_link_libraries(ChronoSync PRIVATE dwmapi.lib comctl32.lib ole32.lib shell32.lib bcrypt.lib mpr.lib uxtheme.lib)
+    target_link_libraries(ChronoSync PRIVATE dwmapi.lib comctl32.lib ole32.lib shell32.lib bcrypt.lib mpr.lib uxtheme.lib advapi32.lib)
 else()
     target_compile_options(ChronoSync PRIVATE -Wall -Wextra -Werror)
     target_compile_options(ChronoSyncTests PRIVATE -Wall -Wextra -Werror)
     # Statically link runtime for MinGW/gcc
     target_link_options(ChronoSync PRIVATE -static -static-libgcc -static-libstdc++)
     target_link_options(ChronoSyncTests PRIVATE -static -static-libgcc -static-libstdc++)
-    target_link_libraries(ChronoSync PRIVATE dwmapi comctl32 ole32 shell32 bcrypt mpr uxtheme)
+    target_link_libraries(ChronoSync PRIVATE dwmapi comctl32 ole32 shell32 bcrypt mpr uxtheme advapi32)
     target_link_libraries(ChronoSyncTests PRIVATE bcrypt mpr)
     target_link_options(ChronoSyncTests PRIVATE -static)
 endif()

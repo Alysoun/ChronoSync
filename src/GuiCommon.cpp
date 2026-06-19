@@ -36,6 +36,7 @@ HWND g_hWndAdvancedGroup = NULL;
 HWND g_hWndRiskLabel = NULL;
 HWND g_hWndLogSplitter = NULL;
 HWND g_hWndCopyLogBtn = NULL;
+HWND g_hWndDisclaimerLink = NULL;
 
 bool g_logFollowTail = true;
 int g_logHeightBias = 80;

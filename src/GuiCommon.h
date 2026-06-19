@@ -68,7 +68,8 @@ enum ControlIds {
     ID_SCHEDULE_CANCEL,
     ID_RISK_LABEL,
     ID_LOG_SPLITTER,
-    ID_COPY_LOG_BUTTON
+    ID_COPY_LOG_BUTTON,
+    ID_DISCLAIMER_LINK
 };
 
 #define WM_SYNC_EVENT               (WM_USER + 10)
@@ -156,6 +157,7 @@ extern HWND g_hWndAdvancedGroup;
 extern HWND g_hWndRiskLabel;
 extern HWND g_hWndLogSplitter;
 extern HWND g_hWndCopyLogBtn;
+extern HWND g_hWndDisclaimerLink;
 
 extern bool g_logFollowTail;
 extern int g_logHeightBias;

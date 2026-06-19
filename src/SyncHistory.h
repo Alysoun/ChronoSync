@@ -49,6 +49,7 @@ namespace ChronoSync {
     class SyncHistoryIO {
     public:
         static constexpr int MaxRuns = 100;
+        static constexpr size_t MaxSnapshotEntries = 25000;
 
         static bool RecordRun(const std::wstring& source,
                               const std::wstring& destination,

@@ -4,6 +4,7 @@
 #include "SyncJob.h"
 #include "NetworkShare.h"
 #include "TaskScheduler.h"
+#include "Disclaimer.h"
 #include <windows.h>
 #include <shellapi.h>
 #include <iostream>
@@ -80,6 +81,7 @@ namespace ChronoSync {
                 return true;
             }
 
+            ChronoSync::PrintCliDisclaimer();
             ChronoSync::SyncStats stats = ChronoSync::SyncEngine::Sync(profile.source, profile.destination, profile.options, callbacks);
             std::wcout << L"Sync complete. Files copied: " << stats.filesCopied
                        << L", skipped: " << stats.filesSkipped
@@ -97,6 +99,7 @@ namespace ChronoSync {
                 return true;
             }
 
+            ChronoSync::PrintCliDisclaimer();
             for (size_t i = 0; i < jobs.size(); ++i) {
                 std::wcout << L"=== Queue job " << (i + 1) << L"/" << jobs.size() << L": " << jobs[i].name << L" ===" << std::endl;
                 std::wstring networkError;

@@ -405,7 +405,7 @@ namespace ChronoSync {
         }
     }
 
-    static constexpr size_t kMaxSnapshotEntries = 25000;
+    static constexpr size_t kMaxSnapshotEntries = SyncHistoryIO::MaxSnapshotEntries;
 
     bool SyncHistoryIO::RecordRun(const std::wstring& source,
                                   const std::wstring& destination,
@@ -528,8 +528,9 @@ namespace ChronoSync {
                                      DestinationSnapshot& snapshot,
                                      std::wstring& errorMessage) {
         if (snapshotId.empty()) {
-            errorMessage = L"No snapshot was saved for this run. Large destination trees "
-                           L"(over 25,000 items) are logged in the index only.";
+            errorMessage = L"No snapshot was saved for this run. Destinations larger than " +
+                           std::to_wstring(MaxSnapshotEntries) +
+                           L" items are logged with run stats only.";
             return false;
         }
 
@@ -612,15 +613,22 @@ namespace ChronoSync {
         size_t totalCopied = 0;
         size_t totalDeleted = 0;
         unsigned long long totalBytes = 0;
+        size_t runsWithSnapshot = 0;
         for (const auto& e : entries) {
             totalCopied += e.filesCopied;
             totalDeleted += e.itemsDeleted;
             totalBytes += e.totalBytesCopied;
+            if (!e.snapshotId.empty()) {
+                runsWithSnapshot++;
+            }
         }
         out << L"Runs: " << entries.size()
             << L" | Files copied: " << totalCopied
             << L" | Items removed: " << totalDeleted
-            << L" | Bytes transferred: " << FormatBytes(totalBytes) << L"\r\n\r\n";
+            << L" | Bytes transferred: " << FormatBytes(totalBytes) << L"\r\n";
+        out << L"Runs with snapshots: " << runsWithSnapshot << L" of " << entries.size()
+            << L" (snapshots saved when destination has \u2264 "
+            << MaxSnapshotEntries << L" items)\r\n\r\n";
 
         for (auto it = entries.rbegin(); it != entries.rend(); ++it) {
             const auto& e = *it;
@@ -631,7 +639,12 @@ namespace ChronoSync {
                 << L" | Dirs: " << e.dirsCreated
                 << L" | " << FormatBytes(e.totalBytesCopied) << L"\r\n";
             out << L"  Source: " << e.source << L"\r\n";
-            out << L"  Snapshot: " << e.snapshotId << L"\r\n\r\n";
+            if (e.snapshotId.empty()) {
+                out << L"  Snapshot: not saved (destination exceeds " << MaxSnapshotEntries
+                    << L" items; run stats only)\r\n\r\n";
+            } else {
+                out << L"  Snapshot: saved (" << e.snapshotId << L")\r\n\r\n";
+            }
         }
         return out.str();
     }
