@@ -1,13 +1,48 @@
-ChronoSync Proprietary Software License
-Version 1.0.0 — June 2026
+ChronoSync Dual LicenseVersion 1.0.0 — June 2026
 
 Copyright (c) 2026 Michael Gartner. All rights reserved.
 
 IMPORTANT: This is not open-source software. This is not an MIT, GPL, or
-Apache-licensed project. Unless you have a separate written agreement
-with the copyright holder, the terms below apply.
+Apache-licensed project.
 
-1. Ownership
+ChronoSync is offered under a dual-license model:
+
+  LICENSE A — GRATIS USE (Sections 3–4 and 8–9)
+    Free for personal use and internal business use of official releases.
+
+  LICENSE B — COMMERCIAL USE (Section 7)
+    Commercial redistribution, resale, SaaS offerings, OEM bundling,
+    and other commercial uses require a separate written agreement.
+
+Unless you have a signed commercial agreement with the copyright holder,
+only License A applies.
+
+1. Definitions
+
+   "Official release" means a binary or source package published by
+   the copyright holder through the official GitHub repository at
+   https://github.com/Alysoun/ChronoSync or through other channels
+   the copyright holder expressly designates as official (for example,
+   a GitHub Release asset attached to a tagged version). A build you
+   compile locally from source, an unofficial mirror, or a modified
+   fork is not an official release unless the copyright holder
+   designates it as such in writing.
+
+   "Internal business use" means use of ChronoSync within a single
+   organization — including its employees and contractors — to sync
+   that organization's own data on systems it owns or controls.
+   Internal business use is for the organization's own operations, not
+   for offering sync or backup services to outside customers.
+
+   Example (permitted under License A): A consulting firm with fifty
+   employees installs ChronoSync on staff workstations to sync
+   internal project folders and tooling the firm controls.
+
+   Example (requires License B): That same firm offers a paid
+   "ChronoSync-powered backup" or managed sync service to external
+   clients, or redistributes ChronoSync as part of a product it sells.
+
+2. Ownership
 
    ChronoSync (including all source code, object code, executables,
    icons, documentation, and derivative works) is owned exclusively by
@@ -20,44 +55,51 @@ with the copyright holder, the terms below apply.
    revoke your right to use a release version you lawfully obtained
    under the terms in effect when you obtained it.
 
-2. Grant of license
+3. License A — Gratis use (personal and internal business)
 
-   If you obtained ChronoSync through an official release published by
-   the copyright holder (for example, a GitHub Release asset or a
-   build distributed by the copyright holder), you are granted a
-   non-exclusive, non-transferable, revocable license to:
+   If you obtained ChronoSync through an official release (as defined
+   in Section 1), you are granted a non-exclusive, non-transferable,
+   revocable license at no charge to:
 
-   (a) install and run one copy of the provided binaries on computers
-       you own or control; and
+   (a) install and run ChronoSync on computers you own or control;
 
-   (b) use ChronoSync for personal or internal business purposes.
+   (b) use ChronoSync for personal, non-commercial purposes; and
 
-3. Restrictions
+   (c) use ChronoSync for internal business use (as defined in
+       Section 1) within your organization.
 
-   Unless the copyright holder gives you prior written permission, you
-   may not:
+   No fee is required for License A uses described above.
 
-   (a) sell, rent, lease, sublicense, or distribute ChronoSync or any
-       portion of it, whether for profit or otherwise;
+4. License A — Restrictions
 
-   (b) use ChronoSync to provide a hosted, managed, or commercial sync
-       service to third parties;
+   Under License A, unless the copyright holder gives you prior written
+   permission (a commercial agreement under License B), you may not:
 
-   (c) remove or alter copyright, trademark, or license notices;
+   (a) redistribute, resell, rent, lease, or sublicense ChronoSync
+       or any portion of it;
 
-   (d) reverse engineer, decompile, or disassemble the software except
+   (b) offer ChronoSync as a hosted, managed, or software-as-a-service
+       (SaaS) product to third parties;
+
+   (c) bundle, embed, or ship ChronoSync as part of another product
+       (OEM bundling) for distribution to third parties;
+
+   (d) remove or alter copyright, trademark, or license notices;
+
+   (e) reverse engineer, decompile, or disassemble the software except
        where applicable law expressly permits despite this limitation;
 
-   (e) use the name "ChronoSync" or associated branding in a way that
+   (f) use the name "ChronoSync" or associated branding in a way that
        suggests endorsement, partnership, or ownership without written
        consent.
 
    Viewing source code in a public repository does not grant any rights
-   beyond those expressly stated in this license. Cloning or forking the
-   repository does not grant a license to redistribute, rebrand, or
-   commercialize the software.
+   beyond License A. Cloning or forking the repository does not grant a
+   license to redistribute, rebrand, or commercialize the software.
+   Building from source for your own internal business use on
+   systems you control is permitted; redistributing that build is not.
 
-4. Contributions
+5. Contributions
 
    If you submit a pull request, patch, or other contribution, you
    represent that you have the right to submit it. Unless otherwise
@@ -65,7 +107,7 @@ with the copyright holder, the terms below apply.
    holder under the same proprietary terms so they may be incorporated
    into owned releases without obligation to open-source them.
 
-5. Disclaimer of warranty
+6. Disclaimer of warranty
 
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
    EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
@@ -78,25 +120,39 @@ with the copyright holder, the terms below apply.
    See the application disclaimer and README for additional user
    responsibility regarding data loss.
 
-6. Commercial licensing
+7. License B — Commercial use (written permission required)
 
-   Commercial redistribution, OEM embedding, SaaS use, enterprise site
-   licenses, and other uses beyond personal or internal business use
-   require a separate written agreement with the copyright holder (or
-   a future assignee, such as a wholly owned LLC, if rights are
-   transferred later).
+   The following uses are not covered by License A and require a
+   separate written commercial agreement with the copyright holder
+   (or a future assignee, such as a wholly owned LLC, if rights are
+   transferred later):
+
+   (a) commercial redistribution or resale of ChronoSync, in whole or
+       in part;
+
+   (b) offering ChronoSync (or a derivative or rebranded version) as a
+       hosted, managed, or SaaS sync or backup service to third parties;
+
+   (c) OEM bundling — embedding or distributing ChronoSync inside
+       another commercial product or appliance;
+
+   (d) enterprise site licenses, white-label deployments, or other
+       commercial arrangements beyond personal or internal business use.
+
+   Commercial terms (fees, scope, support, and duration) are negotiated
+   per agreement.
 
    Contact: Rpracing00@gmail.com
 
-7. Termination
+8. Termination
 
-   This license terminates automatically if you violate any term. Upon
+   License A terminates automatically if you violate any term. Upon
    termination, you must stop using and destroy all copies in your
-   possession.
+   possession. License B is governed by its signed agreement.
 
-8. Governing terms
+9. Governing terms
 
-   This license constitutes the entire agreement regarding use of
-   official releases. The copyright holder may publish updated license
-   terms for future releases; older releases remain governed by the
-   terms published with that release.
+   This dual-license structure constitutes the entire agreement for
+   gratis use of official releases. The copyright holder may publish
+   updated license terms for future releases; older releases remain
+   governed by the terms published with that release.

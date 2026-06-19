@@ -206,19 +206,32 @@ The GUI shows the full disclaimer on first launch and provides a link to read it
 
 ## License and ownership
 
-**ChronoSync is proprietary software. It is not MIT/GPL/open source.**
+**ChronoSync is proprietary dual-licensed software. It is not MIT/GPL/open source.**
 
 | Document | Purpose |
 |----------|---------|
-| [LICENSE](LICENSE) | Terms for using official releases |
+| [LICENSE](LICENSE) | Full dual-license terms |
 | [COPYRIGHT](COPYRIGHT) | Who owns the software and IP |
 
 **Copyright (c) 2026 Michael Gartner.** All rights reserved.
 
-You may use official release binaries for **personal or internal business** purposes under the [LICENSE](LICENSE). You may **not** redistribute, rebrand, or commercialize ChronoSync without a separate written agreement.
+### Dual license at a glance
+
+| | **License A — Gratis** | **License B — Commercial** |
+|--|------------------------|----------------------------|
+| **Cost** | Free | Negotiated (written agreement) |
+| **Personal use** | Yes | N/A (use License A) |
+| **Internal business use** | Yes — e.g. a 50-person firm syncing its own project files | N/A (use License A) |
+| **Commercial redistribution / resale** | No | Written permission required |
+| **SaaS / hosted offering to third parties** | No | Written permission required |
+| **OEM bundling** | No | Written permission required |
+
+**License A** covers personal and internal business use of [official releases](LICENSE) (binaries or source packages published via the official GitHub repo or other channels the copyright holder designates) at no charge.
+
+**License B** is required for commercial redistribution, resale, SaaS offerings, OEM bundling, and other commercial uses beyond License A.
 
 ChronoSync is currently held by the copyright holder personally. The copyright holder may **later assign or license** intellectual property to a wholly owned legal entity (e.g. an LLC) if and when they choose. That does not revoke your right to use a release you lawfully obtained under the terms published with that release.
 
-**Commercial / enterprise licensing:** Rpracing00@gmail.com
+**Commercial licensing:** Rpracing00@gmail.com
 
 When you publish a GitHub Release, include `LICENSE` and `COPYRIGHT` in the zip alongside `ChronoSync.exe` and `README.md`.
